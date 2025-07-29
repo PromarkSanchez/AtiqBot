@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototipo de Chatbot</title>
+    <style>
+        /* --- Estilos Generales --- */
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #f0f4f8;
+            --text-color: #333;
+            --bot-message-bg: #e9ecef;
+            --user-message-bg: #007bff;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: #f8f9fa; /* Color de fondo para ver el contraste */
+        }
+
+        /* --- Contenedor Principal del Chatbot --- */
+        #chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        /* --- Ventana del Chat --- */
+        #chatbot-window {
+            width: 350px;
+            height: 500px;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* Animación para abrir/cerrar */
+            transform: scale(0);
+            transform-origin: bottom right;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #chatbot-window.open {
+            transform: scale(1);
+        }
+
+        /* --- Cabecera del Chat --- */
+        #chatbot-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #chatbot-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        /* --- Área de Mensajes --- */
+        #chatbot-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: var(--secondary-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        /* Estilo común para todos los mensajes */
+        .message {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 20px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .bot-message {
+            background-color: var(--bot-message-bg);
+            color: var(--text-color);
+            border-bottom-left-radius: 5px;
+            align-self: flex-start;
+        }
+        
+        .user-message {
+            background-color: var(--user-message-bg);
+            color: white;
+            border-bottom-right-radius: 5px;
+            align-self: flex-end;
+        }
+
+        .typing-indicator {
+            align-self: flex-start;
+            padding: 10px 15px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: bounce 1s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.1s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.2s; }
+        
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+
+        /* --- Formulario de Entrada --- */
+        #chatbot-form {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            background-color: white;
+        }
+
+        #chatbot-input {
+            flex-grow: 1;
+            border: none;
+            padding: 10px;
+            font-size: 1em;
+            outline: none;
+            background-color: transparent;
+        }
+        
+        #chatbot-send-btn {
+            background: none;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            color: var(--primary-color);
+        }
+        #chatbot-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #chatbot-send-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+
+        /* --- Botón para Abrir/Cerrar Chat --- */
+        #chatbot-toggle-button {
+            width: 60px;
+            height: 60px;
+            background-color: var(--primary-color);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+        }
+        
+        #chatbot-toggle-button:hover {
+            transform: scale(1.1);
+        }
+        
+        #chatbot-toggle-button svg {
+            width: 30px;
+            height: 30px;
+            color: white;
+        }
+        
+        /* Para esconder el botón cuando el chat está abierto */
+        #chatbot-window.open + #chatbot-toggle-button {
+            transform: scale(0);
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Página de Prueba para el Chatbot</h1>
+    <p>El chatbot aparecerá en la esquina inferior derecha.</p>
+    <p>Esta es una página de ejemplo para demostrar que el chatbot flota sobre el contenido existente.</p>
+    
+    <!-- ESTRUCTURA HTML DEL CHATBOT -->
+    <div id="chatbot-container">
+        <div id="chatbot-window">
+            <div id="chatbot-header">
+                <span>Asistente Virtual</span>
+                <button id="chatbot-close-btn">×</button>
+            </div>
+            <div id="chatbot-messages">
+                <!-- Los mensajes se insertarán aquí con JS -->
+            </div>
+            <form id="chatbot-form">
+                <input type="text" id="chatbot-input" placeholder="Escribe tu mensaje..." autocomplete="off">
+                <button type="submit" id="chatbot-send-btn" title="Enviar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2 .01 7z"/></svg>
+                </button>
+            </form>
+        </div>
+
+        <button id="chatbot-toggle-button" title="Abrir Chat">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+            </svg>
+        </button>
+    </div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // --- CONFIGURACIÓN DE LA API (REEMPLAZAR CON TUS VALORES) ---
+        const API_BASE_URL = "https://tu-endpoint-base.com"; // <-- REEMPLAZAR AQUÍ
+        const API_KEY = "TU_API_KEY_AQUI";                   // <-- REEMPLAZAR AQUÍ
+        const APP_ID = ""; // "TU_APP_ID_OPCIONAL_AQUI"      // <-- REEMPLAZAR AQUÍ (O DEJAR VACÍO)
+        
+        // --- SIMULACIÓN DE DATOS DE USUARIO DE BLACKBOARD ---
+        // En una implementación real, estos datos vendrían del LTI o de Blackboard.
+        let userIdentifier = ''; // DNI o ID único del estudiante
+        let userFirstName = '';
+        let userLastName = '';
+
+        // --- SELECCIÓN DE ELEMENTOS DEL DOM ---
+        const chatWindow = document.getElementById('chatbot-window');
+        const toggleButton = document.getElementById('chatbot-toggle-button');
+        const closeButton = document.getElementById('chatbot-close-btn');
+        const messagesContainer = document.getElementById('chatbot-messages');
+        const chatForm = document.getElementById('chatbot-form');
+        const chatInput = document.getElementById('chatbot-input');
+        const sendButton = document.getElementById('chatbot-send-btn');
+
+        // Función para mostrar/ocultar el chat
+        const toggleChat = (forceOpen = null) => {
+            const isOpen = chatWindow.classList.contains('open');
+            if (forceOpen === true || (forceOpen === null && !isOpen)) {
+                chatWindow.classList.add('open');
+                // Al abrir por primera vez, pide datos y saluda
+                if (!userIdentifier) {
+                    initializeSession();
+                }
+                chatInput.focus();
+            } else {
+                chatWindow.classList.remove('open');
+            }
+        };
+
+        // --- LÓGICA DE INICIALIZACIÓN Y SALUDO ---
+        const initializeSession = () => {
+            // Para la prueba, pedimos los datos. En producción, esto no se hará.
+            userIdentifier = prompt("SIMULACIÓN: Ingresa tu DNI o ID de estudiante:", "12345678X");
+            userFirstName = prompt("SIMULACIÓN: Ingresa tu nombre:", "Ana");
+            userLastName = prompt("SIMULACIÓN: Ingresa tu apellido:", "García");
+            
+            if (!userIdentifier || !userFirstName) {
+                userIdentifier = 'test-session-001';
+                userFirstName = 'Usuario';
+                userLastName = 'de Prueba';
+            }
+            
+            // Mensaje de saludo inicial CONSTRUIDO EN EL FRONTEND
+            const welcomeMessage = `Hola, ${userFirstName} ${userLastName}. Soy tu asistente virtual, ¿en qué puedo ayudarte hoy?`;
+            addMessage(welcomeMessage, 'bot');
+        };
+
+        // --- EVENT LISTENERS ---
+        toggleButton.addEventListener('click', () => toggleChat(true));
+        closeButton.addEventListener('click', () => toggleChat(false));
+        
+        chatForm.addEventListener('submit', event => {
+            event.preventDefault();
+            const userMessage = chatInput.value.trim();
+            if (userMessage) {
+                addMessage(userMessage, 'user');
+                sendMessageToAPI(userMessage);
+                chatInput.value = '';
+            }
+        });
+
+        // --- FUNCIONES AUXILIARES ---
+
+        // Añade un mensaje al DOM
+        function addMessage(text, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', `${sender}-message`);
+            messageElement.textContent = text;
+            messagesContainer.appendChild(messageElement);
+            // Auto-scroll hacia el final
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Muestra/oculta el indicador de "escribiendo..."
+        function showTypingIndicator(show) {
+            let indicator = document.getElementById('typing-indicator');
+            if (show) {
+                if (!indicator) {
+                    indicator = document.createElement('div');
+                    indicator.id = 'typing-indicator';
+                    indicator.classList.add('message', 'typing-indicator');
+                    indicator.innerHTML = '<span></span><span></span><span></span>';
+                    messagesContainer.appendChild(indicator);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            } else {
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        }
+        
+        // --- FUNCIÓN PRINCIPAL DE LA API ---
+        async function sendMessageToAPI(userMessage) {
+            const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/chat/`;
+
+            // Muestra el indicador de carga y deshabilita el input
+            showTypingIndicator(true);
+            chatInput.disabled = true;
+            sendButton.disabled = true;
+
+            const requestBody = {
+                dni: userIdentifier,
+                message: userMessage
+            };
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            };
+            if (APP_ID) {
+                headers['X-Application-ID'] = APP_ID;
+            }
+
+            try {
+                const response = await fetch(CHAT_ENDPOINT, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    // Intenta leer el mensaje de error del backend
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                        throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+                    } catch (e) {
+                        // Si el cuerpo del error no es JSON o ya se lanzó el error
+                        if(e.message.startsWith('Error')){ throw e; } // Relanzar nuestro error construido
+                        throw new Error(`Error HTTP: ${response.status}`);
+                    }
+                }
+
+                const data = await response.json();
+                addMessage(data.bot_response, 'bot');
+
+            } catch (error) {
+                console.error("Error al contactar la API del chatbot:", error);
+                addMessage(`Lo siento, ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde. (Error: ${error.message})`, 'bot');
+            } finally {
+                // Oculta el indicador de carga y habilita el input
+                showTypingIndicator(false);
+                chatInput.disabled = false;
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+    });
+    </script>
+</body>
+</html>

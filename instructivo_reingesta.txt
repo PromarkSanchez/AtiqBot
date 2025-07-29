@@ -1,0 +1,44 @@
+PASOS DE RE- INGESTA 
+TRUNCATE TABLE public.langchain_pg_collection, public.langchain_pg_embedding RESTART IDENTITY CASCADE;
+
+ALTER TABLE public.langchain_pg_embedding 
+ALTER COLUMN embedding TYPE vector(384);
+
+CREATE INDEX ON public.langchain_pg_embedding 
+USING HNSW (embedding vector_cosine_ops);
+
+CREATE INDEX ON public.langchain_pg_embedding
+USING GIN (cmetadata);
+
+
+python ingest_document3.py
+
+
+SELECT 
+    cmetadata ->> 'context_name' as contexto,
+    cmetadata ->> 'source_filename' as archivo,
+    count(*) as numero_de_chunks
+FROM 
+    public.langchain_pg_embedding
+GROUP BY 
+    contexto, archivo
+ORDER BY 
+    contexto, archivo;
+	
+	
+Modelos Óptimos para tus 8GB de VRAM (Respuesta Rápida)
+Para obtener un rendimiento óptimo (respuestas en segundos, no en minutos), debes enfocarte en modelos de código abierto en el rango de ~3 a 8 mil millones de parámetros, y específicamente, en sus versiones cuantizadas. La cuantización es un proceso que reduce el tamaño del modelo (y por tanto su uso de VRAM) con una pérdida mínima de calidad.
+Aquí tienes una lista de los mejores modelos que puedes descargar y ejecutar con Ollama en tu hardware para obtener respuestas rápidas. Prueba a descargarlos con ollama pull [nombre_del_modelo]:
+1. El Rey del Balance: llama3:8b-instruct
+Comando: ollama pull llama3:8b-instruct
+¿Por qué?: Es el mejor modelo de su clase actualmente. Producido por Meta, es increíblemente inteligente, sigue muy bien las instrucciones y es muy rápido. Debería caber justo en tus 8GB. Si antes te dio un error de manifiesto, vale la pena intentarlo de nuevo. A veces es un problema temporal del servidor de Ollama.
+Este debería ser tu objetivo número uno.
+2. El Campeón Ligero: phi3:mini
+Comando: ollama pull phi3:mini
+¿Por qué?: Es un modelo de 3.8 mil millones de parámetros de Microsoft. Es sorprendentemente capaz para su tamaño, muy rápido y muy ligero. Consumirá mucha menos VRAM que Llama 3, lo que dejará más espacio para el contexto de la conversación. Es perfecto para tareas de RAG y chatbot. Esta es mi recomendación #2 si buscas máxima velocidad.
+3. El Clásico Confiable: mistral:7b-instruct
+Comando: ollama pull mistral:7b-instruct
+¿Por qué?: Antes de la llegada de Llama 3, este era el rey indiscutible de los modelos de ~7B. Es muy rápido, muy bueno siguiendo instrucciones y una opción muy sólida y probada por la comunidad. Cabrá perfectamente en tu VRAM.
+4. La Alternativa de Google: gemma:7b-instruct
+Comando: ollama pull gemma:7b-instruct
+¿Por qué?: Es la oferta de código abierto de Google. Es un modelo sólido y una buena alternativa para comparar. Su rendimiento es similar al de Mistral 7B.

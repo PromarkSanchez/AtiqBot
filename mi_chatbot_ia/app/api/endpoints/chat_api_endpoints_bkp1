@@ -1,0 +1,435 @@
+# app/api/endpoints/chat_api_endpoints.py
+import os
+import time
+import traceback
+from typing import List, Optional, Dict, Any, Union
+import asyncio
+import json # Para la serialización en CustomSQLChatMessageHistory
+
+from fastapi import APIRouter, HTTPException, Depends, status # Response no se usa directamente aquí
+from sqlalchemy import select # ASEGURADO QUE ESTÁ IMPORTADO
+from sqlalchemy.ext.asyncio import AsyncSession
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# Langchain Imports
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, messages_from_dict
+from langchain_core.documents import Document as LangchainDocument
+from langchain_postgres.vectorstores import PGVector
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.embeddings import SentenceTransformerEmbeddings # Esto podría causar la advertencia de HuggingFaceEmbeddings
+from langchain.memory import ConversationBufferWindowMemory
+from langchain_community.chat_message_histories.sql import SQLChatMessageHistory, BaseMessageConverter
+from langchain.chains import ConversationalRetrievalChain # Obsoleto pero funcional por ahora
+from langchain.chains.llm import LLMChain # Obsoleto pero funcional por ahora
+from langchain.chains.question_answering import load_qa_chain # Obsoleto pero funcional por ahora
+
+
+# Application Specific Imports
+from app.db.session import get_crud_db_session
+from app.models.api_client import ApiClient as ApiClientModel
+from app.models.context_definition import ContextDefinition, ContextMainType # ContextMainType usado para enum
+from app.schemas.schemas import ChatRequest, ChatResponse
+from app.crud import crud_interaction_log, crud_context_definition
+from app.crud.crud_db_connection import get_db_connection_by_id_sync
+from app.config import settings
+from app.tools.sql_tools import run_text_to_sql_lcel_chain # Asumo que está definido y funcional
+from app.security.api_key_auth import get_validated_api_client
+
+print("CHAT_EP_DEBUG: chat_api_endpoints.py module loading...")
+
+# --- Constantes del Módulo (usando settings) ---
+MODEL_NAME_SBERT_FOR_EMBEDDING = settings.MODEL_NAME_SBERT_FOR_EMBEDDING if hasattr(settings, 'MODEL_NAME_SBERT_FOR_EMBEDDING') else 'all-MiniLM-L6-v2'
+PGVECTOR_CHAT_COLLECTION_NAME = settings.PGVECTOR_CHAT_COLLECTION_NAME if hasattr(settings, 'PGVECTOR_CHAT_COLLECTION_NAME') else "chatbot_knowledge_base_v1"
+ACTIVE_LLM_MODEL_NAME = settings.DEFAULT_LLM_MODEL_NAME
+MAX_RETRIEVED_CHUNKS_RAG = settings.MAX_RETRIEVED_CHUNKS_RAG
+CHAT_HISTORY_TABLE_NAME = settings.CHAT_HISTORY_TABLE_NAME if hasattr(settings, 'CHAT_HISTORY_TABLE_NAME') else "chat_message_history_v2"
+DW_CONTEXT_CONFIG_NAME = settings.DW_CONTEXT_CONFIG_NAME
+CHAT_HISTORY_WINDOW_SIZE_RAG = settings.CHAT_HISTORY_WINDOW_SIZE_RAG
+CHAT_HISTORY_WINDOW_SIZE_SQL = settings.CHAT_HISTORY_WINDOW_SIZE_SQL
+LANGCHAIN_VERBOSE_FLAG = settings.LANGCHAIN_VERBOSE # Para logs de Langchain
+
+# --- Configuración de Gemini (una vez al cargar el módulo) ---
+load_dotenv()
+GEMINI_API_KEY_ENV = settings.GEMINI_API_KEY
+if not GEMINI_API_KEY_ENV:
+    print("CHAT_EP_WARNING: GEMINI_API_KEY no encontrado en la configuración/entorno.")
+else:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY_ENV)
+        print("CHAT_EP_INFO: Google Generative AI (Gemini) configurado con API Key.")
+    except Exception as e_genai_config:
+        print(f"CHAT_EP_ERROR: Configurando genai: {e_genai_config}")
+
+router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
+
+# --- Instancias Singleton (Lazy Initialization) ---
+_llm_chat_instance: Optional[ChatGoogleGenerativeAI] = None
+_vector_store_instance_sync: Optional[PGVector] = None
+_lc_sbert_embeddings_instance: Optional[SentenceTransformerEmbeddings] = None
+
+# --- Funciones de obtención para Singletons ---
+def get_lc_sbert_embeddings() -> SentenceTransformerEmbeddings:
+    global _lc_sbert_embeddings_instance
+    if _lc_sbert_embeddings_instance is None:
+        print(f"CHAT_EP_INFO: Creando SBERT Embeddings instance: {MODEL_NAME_SBERT_FOR_EMBEDDING}")
+        # Nota: SentenceTransformerEmbeddings podría estar obsoleto o su clase base (HuggingFaceEmbeddings) lo está.
+        # Considera migrar a `langchain_huggingface.HuggingFaceEmbeddings` si es necesario.
+        _lc_sbert_embeddings_instance = SentenceTransformerEmbeddings(model_name=MODEL_NAME_SBERT_FOR_EMBEDDING)
+    return _lc_sbert_embeddings_instance
+
+def get_langchain_llm() -> ChatGoogleGenerativeAI:
+    global _llm_chat_instance
+    if _llm_chat_instance is None:
+        print(f"CHAT_EP_INFO: Creando ChatGoogleGenerativeAI LLM instance: {ACTIVE_LLM_MODEL_NAME}")
+        if not GEMINI_API_KEY_ENV:
+            raise ValueError("GEMINI_API_KEY no disponible para instanciar LLM.")
+        _llm_chat_instance = ChatGoogleGenerativeAI(
+            model=ACTIVE_LLM_MODEL_NAME,
+            google_api_key=GEMINI_API_KEY_ENV,
+            temperature=settings.DEFAULT_LLM_TEMPERATURE
+        )
+        print("CHAT_EP_INFO: ChatGoogleGenerativeAI LLM instance creada.")
+    return _llm_chat_instance
+
+def get_chat_vector_store_sync() -> PGVector:
+    global _vector_store_instance_sync
+    if _vector_store_instance_sync is None:
+        print(f"CHAT_EP_INFO: Creando PGVector (síncrono) instance: Collection '{PGVECTOR_CHAT_COLLECTION_NAME}'")
+        lc_embeddings = get_lc_sbert_embeddings()
+        sync_vector_db_url = settings.SYNC_DATABASE_VECTOR_URL
+        if not sync_vector_db_url:
+            raise ValueError("SYNC_DATABASE_VECTOR_URL no configurada para PGVector.")
+        _vector_store_instance_sync = PGVector(
+            connection=sync_vector_db_url, # SQLAlchemy URL (sync)
+            embeddings=lc_embeddings,
+            collection_name=PGVECTOR_CHAT_COLLECTION_NAME,
+            use_jsonb=True,  # Si tu columna 'cmetadata' es JSONB
+            async_mode=False,
+            create_extension=False # Asume que pgvector ya está habilitado en la BD
+        )
+        print(f"CHAT_EP_INFO: PGVector (síncrono) instance creada para collection '{PGVECTOR_CHAT_COLLECTION_NAME}'.")
+    return _vector_store_instance_sync
+
+# --- SOLUCIÓN AL TypeError con json.loads en SQLChatMessageHistory ---
+class CustomMessageConverter(BaseMessageConverter):
+    """
+    Convertidor de mensajes personalizado que maneja el caso donde el mensaje
+    ya está deserializado como un diccionario Python por SQLAlchemy desde una columna JSONB.
+    """
+    def from_sql_model(self, sql_message: Any) -> BaseMessage:
+        message_content = sql_message.message
+        if isinstance(message_content, dict):
+            # El mensaje ya es un dict, no necesitamos json.loads()
+            # Langchain espera una lista de dicts para messages_from_dict
+            return messages_from_dict([message_content])[0]
+        elif isinstance(message_content, (str, bytes, bytearray)):
+            # El mensaje es un string JSON, procedemos como antes
+            return messages_from_dict([json.loads(message_content)])[0]
+        else:
+            raise TypeError(
+                f"Unexpected type for SQL message content: {type(message_content)}. "
+                "Expected dict, str, bytes, or bytearray."
+            )
+
+    def to_sql_model(self, message: BaseMessage, session_id: str) -> Any:
+        # Guardamos siempre como string JSON para consistencia,
+        # SQLAlchemy/PG manejarán la conversión a JSONB si la columna es de ese tipo.
+        return self.message_cls(
+            session_id=session_id, message=json.dumps(message.dict())
+        )
+
+class CustomSQLChatMessageHistory(SQLChatMessageHistory):
+    """
+    Subclase de SQLChatMessageHistory que usa el CustomMessageConverter.
+    """
+    def __init__(self, session_id: str, connection: str, table_name: str):
+        super().__init__(session_id=session_id, connection_string=connection, table_name=table_name) # Aún usa connection_string aquí el init de SQLCHM
+        # Sobrescribimos el converter DESPUÉS de la inicialización del padre
+        self.converter = CustomMessageConverter(self.message_cls_name)
+        print(f"CHAT_EP_DEBUG: CustomSQLChatMessageHistory instanciada para session '{session_id}' con CustomMessageConverter.")
+
+# --- Endpoint Principal del Chat ---
+@router.post("/", response_model=ChatResponse)
+async def process_chat_message_langchain(
+    chat_request: ChatRequest,
+    db_crud: AsyncSession = Depends(get_crud_db_session),
+    current_api_client: ApiClientModel = Depends(get_validated_api_client)
+):
+    start_time = time.time()
+    question = chat_request.message
+    user_dni_session_id = chat_request.dni
+
+    # Inicialización del diccionario de log
+    log_entry_data: Dict[str, Any] = {
+        "user_dni": user_dni_session_id,
+        "api_client_name": current_api_client.name,
+        "user_message": question,
+        "llm_model_used": ACTIVE_LLM_MODEL_NAME, # Puede ser sobreescrito si se usa un LLM específico del contexto/agente
+        "bot_response": "[Respuesta no generada por error]",
+        "intent": "UNKNOWN",
+        "retrieved_context_summary": None,
+        "full_prompt_to_llm": None,
+        "error_message": None,
+        "metadata_details_json": {"used_sources": []}
+    }
+    print(f"CHAT_EP_INFO: Solicitud de Chat: Cliente='{current_api_client.name}', User/SessionID='{user_dni_session_id}', Pregunta='{question[:100]}...'")
+
+    sync_crud_history_db_url = settings.SYNC_DATABASE_CRUD_URL
+    if not sync_crud_history_db_url:
+        log_entry_data["error_message"] = "Configuración de historial de chat (DB URL) no encontrada."
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=log_entry_data["error_message"])
+    
+    # Usar la subclase CustomSQLChatMessageHistory
+    chat_message_history_for_request = CustomSQLChatMessageHistory(
+        session_id=user_dni_session_id,
+        connection=sync_crud_history_db_url, # Este 'connection' debería ser la string URL
+        table_name=CHAT_HISTORY_TABLE_NAME
+    )
+    
+    try:
+        if LANGCHAIN_VERBOSE_FLAG:
+            loaded_messages_early = await asyncio.to_thread(lambda: list(chat_message_history_for_request.messages)) # Intenta cargar aquí para ver el error pronto
+            print(f"CHAT_EP_DEBUG: Historial (early load for verbose): Sesión '{user_dni_session_id}', {len(loaded_messages_early)} mensajes.")
+    except Exception as e_load_hist:
+        print(f"CHAT_EP_WARNING: Error cargando historial (early verbose load): {type(e_load_hist).__name__} - {e_load_hist}")
+        # No relanzar, el flujo principal lo intentará de nuevo y lo manejará si persiste.
+
+    try:
+        llm = get_langchain_llm() # Obtener instancia LLM (podría ser sobreescrita más adelante)
+
+        # ---- Lógica de Contextos Permitidos por ApiClient ----
+        api_client_settings = current_api_client.settings
+        if not isinstance(api_client_settings, dict): # Sanity check
+            api_client_settings = {}
+            print(f"CHAT_EP_WARNING: ApiClient ID {current_api_client.id} tiene settings inválidos: {current_api_client.settings}")
+        
+        allowed_context_ids_from_client: List[int] = api_client_settings.get("allowed_context_ids", [])
+        print(f"CHAT_EP_DEBUG: IDs de contextos raw del Cliente API ('{current_api_client.name}'): {allowed_context_ids_from_client}")
+
+        resolved_api_client_allowed_context_names: List[str] = []
+        if allowed_context_ids_from_client:
+            stmt = select(ContextDefinition.name).filter(
+                ContextDefinition.id.in_(allowed_context_ids_from_client),
+                ContextDefinition.is_active == True # Solo considerar contextos activos
+            )
+            result = await db_crud.execute(stmt)
+            resolved_api_client_allowed_context_names = result.scalars().all()
+        
+        print(f"CHAT_EP_INFO: Nombres de contextos (activos y permitidos) para el ApiClient: {resolved_api_client_allowed_context_names or 'NINGUNO'}")
+
+        # ---- Lógica de Enrutamiento (SQL vs RAG) ----
+        sql_intent_keywords = settings.SQL_INTENT_KEYWORDS
+        question_lower = question.lower()
+        is_sql_intent_heuristic = any(keyword in question_lower for keyword in sql_intent_keywords)
+        if not is_sql_intent_heuristic: # Si no hay keywords, chequear por prefijos de tablas del DW
+            dw_table_prefixes = settings.DW_TABLE_PREFIXES_FOR_INTENT
+            is_sql_intent_heuristic = any(mention.lower() in question_lower for mention in dw_table_prefixes)
+        
+        # Un contexto de DW debe estar entre los permitidos para este ApiClient y la intención debe ser SQL
+        attempt_sql_query_flag = DW_CONTEXT_CONFIG_NAME in resolved_api_client_allowed_context_names and is_sql_intent_heuristic
+        
+        context_def_dw_instance: Optional[ContextDefinition] = None # Modelo ORM
+        if DW_CONTEXT_CONFIG_NAME in resolved_api_client_allowed_context_names: # Si el DW está permitido, cargarlo
+             context_def_dw_instance = await crud_context_definition.get_context_definition_by_name(
+                 db_crud, name=DW_CONTEXT_CONFIG_NAME, load_relations_fully=True # Necesita relaciones para db_connections
+            )
+             if not context_def_dw_instance:
+                 print(f"CHAT_EP_WARNING: Contexto DW '{DW_CONTEXT_CONFIG_NAME}' configurado en settings pero no encontrado/activo en BD.")
+
+        # ---- Rama Text-to-SQL ----
+        if attempt_sql_query_flag and context_def_dw_instance and \
+           context_def_dw_instance.main_type == ContextMainType.DATABASE_QUERY and \
+           context_def_dw_instance.db_connection_config: # Verifica que tenga una conexión asignada
+            
+            print(f"CHAT_EP_INFO: Ruta Text-to-SQL seleccionada para Contexto: '{context_def_dw_instance.name}'.")
+            log_entry_data["intent"] = "SQL_QUERY_DW"
+            
+            # get_db_connection_by_id_sync necesita el ID de la config, no el objeto
+            db_conn_orm_obj_for_sql_tool = get_db_connection_by_id_sync(context_def_dw_instance.db_connection_config_id) # Asumiendo que db_connection_config_id está en el modelo ORM
+            if not db_conn_orm_obj_for_sql_tool:
+                raise ValueError(f"Config de Conexión BD '{context_def_dw_instance.db_connection_config_id}' para DW no pudo cargarse.")
+
+            sql_policy_from_context = (context_def_dw_instance.processing_config or {}).get("sql_select_policy", {})
+            if not sql_policy_from_context or not isinstance(sql_policy_from_context, dict) or \
+               not sql_policy_from_context.get("allowed_tables_for_select"): # OJO: en schema Pydantic, `allowed_tables_for_select` está en `DatabaseQueryProcessingConfigSchema` -> `selected_schema_tables_for_llm`?
+                log_entry_data["bot_response"] = "La configuración para consultas a la base de datos está incompleta (no se definieron tablas permitidas)."
+                log_entry_data["error_message"] = "Política SQL: Falta 'allowed_tables_for_select' en processing_config."
+                print("CHAT_EP_ERROR: " + log_entry_data["error_message"])
+            else:
+                # Aquí 'sql_policy_from_context' es el dict del processing_config.
+                # La función run_text_to_sql_lcel_chain espera un objeto SqlSelectPolicySchema o un dict que Pydantic pueda validar.
+                
+                formatted_sql_history_str = ""
+                # ... (tu lógica de historial para SQL) ...
+
+                sql_output = await run_text_to_sql_lcel_chain(
+                    question=question, chat_history_str=formatted_sql_history_str,
+                    db_conn_config_for_sql=db_conn_orm_obj_for_sql_tool, # Pasar el objeto ORM
+                    llm=llm, sql_policy=sql_policy_from_context # Pasar el dict directamente
+                )
+                log_entry_data["bot_response"] = sql_output["final_answer_llm"]
+                # ... (tu loggeo para SQL)
+        
+        # ---- Rama RAG Documental / Esquema ----
+        else:
+            print("CHAT_EP_INFO: Ruta RAG (documental/esquema) seleccionada.")
+            log_entry_data["intent"] = "RAG_DOCS_OR_SCHEMA"
+            
+            final_rag_target_context_names: List[str] = []
+            primary_context_for_rag_prompts_orm: Optional[ContextDefinition] = None # Modelo ORM
+
+            for ctx_name in resolved_api_client_allowed_context_names:
+                current_ctx_orm: Optional[ContextDefinition] = None
+                if ctx_name == DW_CONTEXT_CONFIG_NAME and context_def_dw_instance:
+                    current_ctx_orm = context_def_dw_instance # Ya cargado
+                else:
+                    current_ctx_orm = await crud_context_definition.get_context_definition_by_name(
+                        db_crud, name=ctx_name, load_relations_fully=False # Solo necesitamos .main_type y .processing_config aquí
+                    )
+
+                if not current_ctx_orm or not current_ctx_orm.is_active:
+                    print(f"CHAT_EP_DEBUG: Contexto RAG '{ctx_name}' no encontrado, inactivo, o error. Omitiendo."); continue
+
+                # Decidir si incluir este contexto en la búsqueda RAG
+                is_dw_context_currently_checked = (current_ctx_orm.name == DW_CONTEXT_CONFIG_NAME)
+                include_this_ctx_in_rag = False
+
+                if not is_dw_context_currently_checked and current_ctx_orm.main_type == ContextMainType.DOCUMENTAL:
+                    include_this_ctx_in_rag = True
+                elif is_dw_context_currently_checked and not attempt_sql_query_flag and \
+                     current_ctx_orm.main_type in [ContextMainType.DOCUMENTAL, ContextMainType.DATABASE_QUERY]:
+                     # Incluir DW para RAG de su schema si no es intento SQL
+                    include_this_ctx_in_rag = True
+                
+                if include_this_ctx_in_rag:
+                    final_rag_target_context_names.append(ctx_name)
+                    if not primary_context_for_rag_prompts_orm:
+                        primary_context_for_rag_prompts_orm = current_ctx_orm
+                        # Si el 'primary' necesita ser cargado 'fully' para prompts, se podría recargar aquí.
+                        # Por ahora, asumimos que .processing_config (columna) está disponible.
+
+            print(f"CHAT_EP_INFO: Contextos finales para la búsqueda RAG: {final_rag_target_context_names or 'NINGUNO'}")
+
+            if not final_rag_target_context_names:
+                log_entry_data["bot_response"] = "No se encontraron contextos documentales o de esquema apropiados para tu consulta."
+                log_entry_data["retrieved_context_summary"] = "RAG: Sin contextos válidos para la consulta."
+            else:
+                rag_memory = ConversationBufferWindowMemory(
+                    memory_key="chat_history", chat_memory=chat_message_history_for_request, 
+                    return_messages=True, k=CHAT_HISTORY_WINDOW_SIZE_RAG, output_key='answer'
+                )
+                vector_store = get_chat_vector_store_sync()
+                rag_metadata_filter = {"context_name": {"$in": final_rag_target_context_names}}
+                retriever = vector_store.as_retriever(
+                    search_kwargs={"k": MAX_RETRIEVED_CHUNKS_RAG, "filter": rag_metadata_filter}
+                )
+                print(f"CHAT_EP_DEBUG: Retriever para RAG configurado con filtro: {rag_metadata_filter}")
+                
+                condense_template_str = settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE
+                docs_qa_template_str = settings.DEFAULT_RAG_DOCS_QA_TEMPLATE
+                
+                if primary_context_for_rag_prompts_orm and primary_context_for_rag_prompts_orm.processing_config:
+                    # primary_context_for_rag_prompts_orm.processing_config es un dict
+                    # El schema Pydantic DocumentalProcessingConfigSchema define .rag_prompts
+                    # Podrías parsear el dict con ese schema para type-safety, o acceder directamente.
+                    doc_proc_cfg_dict = primary_context_for_rag_prompts_orm.processing_config
+                    # Si tu modelo ContextDefinition TIENE un campo procesing_config_documental_parsed
+                    # y fue cargado por _prepare_context... usarías eso. Aquí es el dict crudo.
+                    if isinstance(doc_proc_cfg_dict.get("rag_prompts"), dict):
+                        cfg_prompts = doc_proc_cfg_dict["rag_prompts"]
+                        condense_template_str = cfg_prompts.get("condense_question_template", condense_template_str)
+                        docs_qa_template_str = cfg_prompts.get("docs_qa_template", docs_qa_template_str)
+                        print(f"CHAT_EP_INFO: Prompts para RAG cargados desde ContextDefinition '{primary_context_for_rag_prompts_orm.name}'.")
+                
+                q_gen_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template(condense_template_str), verbose=LANGCHAIN_VERBOSE_FLAG)
+                combine_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=ChatPromptTemplate.from_template(docs_qa_template_str), verbose=LANGCHAIN_VERBOSE_FLAG)
+                
+                crc_chain = ConversationalRetrievalChain(
+                    retriever=retriever, question_generator=q_gen_chain, combine_docs_chain=combine_chain,
+                    memory=rag_memory, return_source_documents=True, verbose=LANGCHAIN_VERBOSE_FLAG
+                )
+                
+                print(f"CHAT_EP_INFO: Invocando cadena RAG (ConversationalRetrievalChain) para Sesión: '{user_dni_session_id}'...")
+                # Aquí es donde el historial (memory) se usa y podría dar el error si CustomSQLChatMessageHistory no funciona.
+                rag_result = await asyncio.to_thread(crc_chain.invoke, {"question": question})
+                
+                log_entry_data["bot_response"] = rag_result.get("answer", "[Respuesta RAG no obtenida por la cadena]")
+                # ... (tu loggeo de fuentes RAG) ...
+
+    # --- Manejo de Excepciones del Flujo Principal ---
+    except ValueError as ve_flow: # Errores de configuración o validación esperados
+        print(f"CHAT_EP_ERROR: ValueError en flujo: {ve_flow}")
+        traceback.print_exc(limit=3) # Limitar traceback para no ser tan verboso
+        log_entry_data["error_message"] = f"Error de Configuración/Validación: {str(ve_flow)}"
+        log_entry_data["bot_response"] = log_entry_data.get("bot_response", "[Problema de configuración al procesar tu solicitud]") # Evitar sobreescribir si ya hay respuesta
+    except HTTPException as http_exc_flow: # Si alguna lógica interna lanza HTTPException
+        raise http_exc_flow # Relanzar para que FastAPI la maneje como es debido
+    except Exception as e_main_flow: # Errores inesperados
+        print(f"CHAT_EP_CRITICAL_ERROR: Excepción no manejada en flujo principal: {type(e_main_flow).__name__} - {e_main_flow}")
+        traceback.print_exc() # Imprimir traceback completo para depuración
+        log_entry_data["error_message"] = f"Error Interno del Chatbot: {type(e_main_flow).__name__}" # No exponer detalles del error al usuario
+        log_entry_data["bot_response"] = "[El chatbot tuvo un problema técnico inesperado. Por favor, inténtalo de nuevo más tarde.]"
+    
+    # --- Bloque Finally: Guardado de Historial y Log de Interacción ---
+    finally:
+        try:
+            # Solo guardar en historial si hubo una respuesta generada exitosamente (o un error manejado)
+            if log_entry_data["error_message"] is None and "[Respuesta no generada por error]" not in log_entry_data["bot_response"]:
+                print(f"CHAT_EP_DEBUG: Guardando interacción en historial BD para sesión '{user_dni_session_id}'...")
+                await asyncio.to_thread(chat_message_history_for_request.add_user_message, question)
+                await asyncio.to_thread(chat_message_history_for_request.add_ai_message, log_entry_data["bot_response"])
+                print(f"CHAT_EP_INFO: Interacción guardada en historial BD para sesión '{user_dni_session_id}'.")
+            else:
+                print(f"CHAT_EP_DEBUG: No se guarda en historial BD debido a error previo o respuesta no generada. Error: {log_entry_data['error_message']}")
+        except Exception as e_hist_final_save:
+            print(f"CHAT_EP_ERROR: Falló el guardado explícito del historial BD: {type(e_hist_final_save).__name__} - {e_hist_final_save}")
+        
+        end_time = time.time()
+        log_entry_data["response_time_ms"] = int((end_time - start_time) * 1000)
+        
+        try:
+            print(f"CHAT_EP_DEBUG: Guardando log de interacción. Intent: '{log_entry_data.get('intent', 'UNKNOWN')}'")
+            await crud_interaction_log.create_interaction_log(db_crud, log_entry_data) # Pasa el dict directamente
+            print("CHAT_EP_INFO: Log de interacción guardado.")
+        except Exception as e_log_final_save:
+            print(f"CHAT_EP_CRITICAL_ERROR: Falló el guardado del log de interacción: {type(e_log_final_save).__name__} - {e_log_final_save}")
+            # Loggear los datos de forma segura para no exponer información sensible en logs extensos
+            safe_log_data_preview = {k: (str(v)[:100] + '...' if isinstance(v, str) and len(v) > 100 else v) for k,v in log_entry_data.items()}
+            print(f"CHAT_EP_CRITICAL_ERROR_DATA: Datos del log fallido (preview): {safe_log_data_preview}")
+            
+    return ChatResponse(
+        dni=chat_request.dni,
+        original_message=question,
+        bot_response=log_entry_data["bot_response"].strip()
+        # metadata_details_json ya está en log_entry_data, se puede añadir a ChatResponse si el schema lo tiene.
+        # Si ChatResponse schema tiene metadata_details_json:
+        # metadata_details_json=log_entry_data["metadata_details_json"]
+    )
+
+# --- Endpoint Auxiliar (ej. para listar modelos, si es necesario) ---
+@router.get("/list-models", summary="Listar Modelos LLM Disponibles (Gemini)")
+async def list_available_llm_models():
+    """
+    Endpoint para listar los modelos disponibles a través del proveedor configurado (ej. Gemini).
+    Útil para propósitos de UI o configuración.
+    """
+    if not GEMINI_API_KEY_ENV:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Servicio de listado de modelos no disponible (API Key no configurada).")
+    
+    models_info = []
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods: # Filtrar solo modelos de generación
+                models_info.append({
+                    "name": m.name, "version": m.version, "display_name": m.display_name,
+                    "description": m.description, "input_token_limit": m.input_token_limit,
+                    "output_token_limit": m.output_token_limit
+                })
+        return models_info
+    except Exception as e_list_models:
+        print(f"CHAT_EP_ERROR: Error listando modelos LLM: {e_list_models}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al listar modelos: {str(e_list_models)}")
+
+print("CHAT_EP_DEBUG: chat_api_endpoints.py module FULLY loaded.")

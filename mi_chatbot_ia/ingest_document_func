@@ -1,0 +1,316 @@
+# mi_chatbot_ia/ingest_document.py
+import asyncio
+import os
+import json
+from typing import List, Dict, Any, Optional, Tuple
+import traceback
+import tempfile
+import re # Para S3, aunque no se usa explícitamente en la lógica actual que te pasé antes. Puede ser útil.
+
+# Langchain imports
+from langchain_core.documents import Document as LangchainCoreDocument
+from langchain_community.document_loaders import TextLoader
+
+try: from langchain_community.document_loaders import PyPDFLoader
+except ImportError: PyPDFLoader = None; print("INGEST_WARN: PyPDFLoader no disponible (pip install pypdf).")
+try: from langchain_community.document_loaders import Docx2txtLoader
+except ImportError: Docx2txtLoader = None; print("INGEST_WARN: Docx2txtLoader no disponible (pip install docx2txt).")
+try: from langchain_community.document_loaders import UnstructuredExcelLoader
+except ImportError: UnstructuredExcelLoader = None; print("INGEST_WARN: UnstructuredExcelLoader no disponible (pip install \"unstructured[xlsx]\" openpyxl).")
+
+# S3 imports
+try:
+    import boto3
+    from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
+except ImportError:
+    boto3 = None # type: ignore
+    NoCredentialsError = PartialCredentialsError = ClientError = Exception # Define placeholders para los tipos de excepción
+    print("INGEST_WARN: boto3 no disponible. Funcionalidad S3 no operativa (pip install boto3).")
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_postgres.vectorstores import PGVector
+from langchain_community.embeddings import SentenceTransformerEmbeddings
+
+# SQLAlchemy y modelos
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload, Session as SASession
+from sqlalchemy import create_engine as sa_create_engine, text # <<--- IMPORTADO 'text'
+from sqlalchemy.orm import sessionmaker as sa_sessionmaker
+from sqlalchemy.sql import func
+
+# Módulos de la aplicación
+from app.db.session import AsyncSessionLocal_CRUD, async_engine_crud # Para ContextDefinitions
+from app.models.context_definition import ContextDefinition, ContextMainType
+from app.models.document_source_config import DocumentSourceConfig, SupportedDocSourceType
+from app.models.db_connection_config import DatabaseConnectionConfig, SupportedDBType
+from app.utils.security_utils import decrypt_data
+from app.config import settings
+from app.tools.sql_tools import _get_sync_db_engine as get_external_db_engine # Reusar de sql_tools
+
+# --- Configuración Global ---
+MODEL_NAME_SBERT_FOR_EMBEDDING = settings.MODEL_NAME_SBERT_FOR_EMBEDDING
+PGVECTOR_MAIN_COLLECTION_NAME = settings.PGVECTOR_CHAT_COLLECTION_NAME
+DEFAULT_CHUNK_SIZE = 1000; DEFAULT_CHUNK_OVERLAP = 150 # Reducido overlap
+DEFAULT_DB_SCHEMA_CHUNK_SIZE = 2000; DEFAULT_DB_SCHEMA_CHUNK_OVERLAP = 200
+# -------------------------------------------------
+
+_sbert_embeddings_instance: Optional[SentenceTransformerEmbeddings] = None
+_sync_crud_engine_for_ingest = None
+_SyncCRUDSessionLocal_for_ingest = None
+
+def get_sbert_embeddings_instance() -> SentenceTransformerEmbeddings: # ... (sin cambios)
+    global _sbert_embeddings_instance
+    if _sbert_embeddings_instance is None: _sbert_embeddings_instance = SentenceTransformerEmbeddings(model_name=MODEL_NAME_SBERT_FOR_EMBEDDING)
+    return _sbert_embeddings_instance
+
+# No necesitamos get_sync_crud_session_for_ingest si ContextDefinition.db_connection_config se carga bien
+
+def fetch_data_from_db_for_ingest(db_conn_config: DatabaseConnectionConfig, query: str) -> List[Dict[str, Any]]:
+    """Obtiene datos de una BD externa de forma síncrona para el script de ingesta."""
+    print(f"    DB_FETCH_INGEST: Conectando a '{db_conn_config.name}' (Tipo: {db_conn_config.db_type.value})")
+    
+    engine = None
+    try:
+        # Usar la función de sql_tools que ya tienes para crear el engine síncrono
+        engine = get_external_db_engine(db_conn_config, context_for_log="INGEST_FETCH_DATA")
+        
+        query_results: List[Dict[str, Any]] = []
+        with engine.connect() as connection:
+            result_proxy = connection.execute(text(query)) # 'text' ya está importado
+            column_names = list(result_proxy.keys())
+            for row_tuple in result_proxy.fetchall():
+                query_results.append(dict(zip(column_names, row_tuple)))
+        print(f"    DB_FETCH_INGEST: Query OK, {len(query_results)} filas obtenidas.")
+        return query_results
+    except Exception as e_sa:
+        print(f"    ERROR DB_FETCH_INGEST (SQLAlchemy) en '{db_conn_config.name}': {e_sa}")
+        traceback.print_exc()
+        return [] # Devuelve lista vacía en error
+    finally:
+        if engine: engine.dispose()
+
+
+def process_document_source_content( # Refactorizado a función síncrona
+    doc_source: DocumentSourceConfig, 
+    context_def: ContextDefinition,   
+    vector_store: PGVector         
+):
+    print(f"  DOC_SRC_PROC: Origen '{doc_source.name}' (Tipo: {doc_source.source_type.value}) para Contexto '{context_def.name}'")
+    loaded_lc_docs: List[LangchainCoreDocument] = []
+
+    if doc_source.source_type == SupportedDocSourceType.LOCAL_FOLDER:
+        source_path_config = doc_source.path_or_config
+        if not (isinstance(source_path_config, dict) and "path" in source_path_config):
+            print(f"    ERROR LOCAL_FOLDER: path_or_config inválido para ID {doc_source.id}."); return
+        folder_path = source_path_config["path"]
+        if not os.path.isdir(folder_path):
+            print(f"    ERROR LOCAL_FOLDER: Ruta '{folder_path}' no encontrada (ID: {doc_source.id})."); return
+
+        print(f"    LOCAL_FOLDER: Cargando documentos desde: {folder_path}")
+        for item_name in os.listdir(folder_path): # --- INICIO TU LÓGICA LOCAL_FOLDER (reintegrada) ---
+            item_full_path = os.path.join(folder_path, item_name)
+            if not os.path.isfile(item_full_path): continue
+            file_documents_loaded: List[LangchainCoreDocument] = []; processed_file_type_by_loader: Optional[str] = None
+            file_extension = item_name.lower().split('.')[-1] if '.' in item_name else ''
+            try:
+                if file_extension in ['txt', 'md']: loader = TextLoader(item_full_path, encoding='utf-8'); file_documents_loaded = loader.load(); processed_file_type_by_loader = "Text"
+                elif file_extension == 'pdf':
+                    if PyPDFLoader: loader = PyPDFLoader(item_full_path); file_documents_loaded = loader.load_and_split(); processed_file_type_by_loader = "PDF"
+                    else: print(f"      WARN: PyPDFLoader no disponible. Omitiendo PDF: '{item_name}'.")
+                elif file_extension == 'docx':
+                    if Docx2txtLoader: loader = Docx2txtLoader(item_full_path); file_documents_loaded = loader.load(); processed_file_type_by_loader = "DOCX"
+                    else: print(f"      WARN: Docx2txtLoader no disponible. Omitiendo DOCX: '{item_name}'.")
+                elif file_extension in ['xlsx', 'xls']:
+                    if UnstructuredExcelLoader: loader = UnstructuredExcelLoader(item_full_path, mode="elements"); file_documents_loaded = loader.load(); processed_file_type_by_loader = "Excel (Unstructured)"
+                    else: print(f"      WARN: UnstructuredExcelLoader no disponible. Omitiendo Excel: '{item_name}'.")
+                else: continue
+                if processed_file_type_by_loader and file_documents_loaded:
+                    print(f"        '{item_name}' ({processed_file_type_by_loader}): {len(file_documents_loaded)} docs Langchain.")
+                    for idx, doc_item in enumerate(file_documents_loaded):
+                        doc_item.metadata = doc_item.metadata or {}; doc_item.metadata.update({'source_filename': item_name, 'source_doc_source_id': doc_source.id,'source_doc_source_name': doc_source.name, 'loader_used': processed_file_type_by_loader,'original_doc_index_in_file': idx})
+                        if processed_file_type_by_loader == "PDF" and 'page' in doc_item.metadata: doc_item.metadata['source_page_number'] = doc_item.metadata['page'] + 1 
+                    loaded_lc_docs.extend(file_documents_loaded)
+            except Exception as e_file_load: print(f"      ERROR al procesar '{item_name}': {e_file_load}") # --- FIN TU LÓGICA LOCAL_FOLDER ---
+
+    elif doc_source.source_type == SupportedDocSourceType.S3_BUCKET:
+        if not boto3: print(f"    ERROR S3: Boto3 no instalado. Omitiendo {doc_source.name}."); return
+        s3_cfg = doc_source.path_or_config
+        if not (isinstance(s3_cfg, dict) and "bucket_name" in s3_cfg): print(f"   ERROR S3: Falta 'bucket_name' para {doc_source.name}."); return
+        s3_bucket = s3_cfg["bucket_name"]; s3_prefix = s3_cfg.get("prefix", "").lstrip('/')
+        creds = {}
+        if doc_source.credentials_info_encrypted:
+            dec_str = decrypt_data(doc_source.credentials_info_encrypted)
+            if dec_str and dec_str != "[DATO ENCRIPTADO INVÁLIDO]": 
+                try: creds = json.loads(dec_str)
+                except json.JSONDecodeError: print(f"      ERROR S3: JSON creds S3 inválido para {doc_source.name}.")
+            else: print(f"      ERROR S3: No se pudo desencriptar creds S3 para {doc_source.name}")
+        
+        if not creds.get("aws_access_key_id") and not os.getenv("AWS_ACCESS_KEY_ID"): 
+            print(f"    WARN S3: No hay creds S3 para '{doc_source.name}'. Se usará config de entorno/rol IAM si existe.")
+
+        s3_client_args = {k:v for k,v in creds.items() if k in ["aws_access_key_id","aws_secret_access_key","region_name","aws_session_token"]}
+        
+        print(f"    S3_PROC: Bucket='{s3_bucket}', Prefijo='{s3_prefix}'")
+        try:
+            s3 = boto3.client('s3', **s3_client_args)
+            paginator = s3.get_paginator('list_objects_v2'); object_pages = paginator.paginate(Bucket=s3_bucket, Prefix=s3_prefix)
+            for page in object_pages:
+                for s3_object in page.get("Contents", []):
+                    obj_key = s3_object["Key"]
+                    if obj_key.endswith('/'): continue
+                    file_name_only = os.path.basename(obj_key); file_ext = file_name_only.lower().split('.')[-1]
+                    if file_ext not in ['txt','md','pdf','docx','xlsx','xls']: continue
+                    print(f"      S3_PROC: Procesando '{obj_key}'...")
+                    with tempfile.NamedTemporaryFile(delete=True, suffix=f".{file_ext}") as tmpfile: # delete=True es más seguro
+                        s3.download_fileobj(s3_bucket, obj_key, tmpfile); tmpfile.seek(0); tmp_path = tmpfile.name
+                        s3_file_docs: List[LangchainCoreDocument] = []; s3_loader_name: Optional[str] = None
+                        try:
+                            if file_ext in ['txt','md']: L=TextLoader(tmp_path,encoding='utf-8'); s3_file_docs=L.load(); s3_loader_name="Text(S3)"
+                            elif file_ext=='pdf' and PyPDFLoader: L=PyPDFLoader(tmp_path); s3_file_docs=L.load_and_split(); s3_loader_name="PDF(S3)"
+                            elif file_ext=='docx' and Docx2txtLoader: L=Docx2txtLoader(tmp_path); s3_file_docs=L.load(); s3_loader_name="DOCX(S3)"
+                            elif file_ext in ['xlsx','xls'] and UnstructuredExcelLoader: L=UnstructuredExcelLoader(tmp_path,mode="elements"); s3_file_docs=L.load(); s3_loader_name="Excel(S3)"
+                            if s3_loader_name and s3_file_docs:
+                                print(f"        '{file_name_only}'({s3_loader_name}):{len(s3_file_docs)} docs.")
+                                for i,d in enumerate(s3_file_docs):d.metadata=(d.metadata or {});d.metadata.update({'source_filename':file_name,'source_s3_key':obj_key,'source_doc_source_id':doc_source.id,'source_doc_source_name':doc_source.name,'loader_used':s3_loader_name,'original_doc_index_in_file': i}); 
+                                if s3_loader_name == "PDF(S3)" and 'page' in d.metadata: d.metadata['source_page_number'] = d.metadata['page'] + 1
+                                loaded_lc_docs.extend(s3_file_docs)
+                        except Exception as e: print(f"        ERROR load S3 item '{obj_key}':{e}")
+        except (NoCredentialsError, PartialCredentialsError) as e: print(f"    ERROR S3 Creds: {doc_source.name} - {e}")
+        except ClientError as e: print(f"    ERROR S3 Boto3 Client: {doc_source.name} - {e}")
+        except Exception as e: print(f"    ERROR S3 General: {doc_source.name} - {e}")
+
+    if not loaded_lc_docs: print(f"    DOC_SRC_PROC: No docs Langchain cargados para '{doc_source.name}'."); return
+    
+    cfg_proc = context_def.processing_config or {}
+    chunk_s = cfg_proc.get("chunk_size", DEFAULT_CHUNK_SIZE); chunk_o = cfg_proc.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_s, chunk_overlap=chunk_o)
+    final_chunks = splitter.split_documents(loaded_lc_docs)
+    if not final_chunks: print(f"    DOC_SRC_PROC: No chunks generados para '{doc_source.name}'."); return
+    print(f"    DOC_SRC_PROC: Total chunks para '{doc_source.name}': {len(final_chunks)}")
+    for chunk in final_chunks: chunk.metadata=(chunk.metadata or {}); chunk.metadata.update({'context_id':context_def.id, 'context_name':str(context_def.name),'context_main_type':str(context_def.main_type.value)})
+    try: vector_store.add_documents(documents=final_chunks); print(f"    DOC_SRC_PROC: Chunks de '{doc_source.name}' INGESTADOS OK.")
+    except Exception as e: print(f"    ERROR DOC_SRC_PROC: Ingesta PGVector: {e}")
+
+
+async def process_database_query_context(context_def: ContextDefinition, vector_store: PGVector):
+    print(f"  DB_SCHEMA_CTX_PROC: Contexto DATABASE_QUERY: '{context_def.name}' (ID: {context_def.id})")
+    if not context_def.db_connection_config: # Usar la relación directamente (ya cargada por selectinload)
+        print(f"    ERROR DB_SCHEMA: Contexto '{context_def.name}' no tiene db_connection_config válida o no se cargó.")
+        return
+    db_conn_to_use = context_def.db_connection_config
+
+    processing_cfg_dict = context_def.processing_config or {}
+    dict_query = processing_cfg_dict.get("dictionary_table_query")
+    if not dict_query: print(f"    ERROR DB_SCHEMA: Falta 'dictionary_table_query' en config de '{context_def.name}'."); return
+
+    print(f"    DB_SCHEMA_CTX_PROC: Usando Conexión '{db_conn_to_use.name}'. Query diccionario: {dict_query[:100]}...")
+    schema_rows = await asyncio.to_thread(fetch_data_from_db_for_ingest, db_conn_to_use, dict_query) # fetch_data_from_db_for_ingest es sync
+    if not schema_rows: print(f"    ADVERTENCIA DB_SCHEMA: Query de diccionario no devolvió datos para '{db_conn_to_use.name}'."); return
+    
+    print(f"    DB_SCHEMA_CTX_PROC: {len(schema_rows)} filas del diccionario. Generando docs de esquema...")
+    tables_info: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    cfg = processing_cfg_dict # Ya es processing_config
+    custom_table_descs = cfg.get("custom_table_descriptions", {})
+    default_desc = cfg.get("table_description_template_default_desc", "Tabla de datos.")
+    col_template_str = cfg.get("column_description_template", "- Columna `{columna}` (Tipo: `{tipo}{longitud_str}` Nulos: {permite_nulos} Autonum: {es_autonumerico}): {descripcion_columna}. {fk_info}")
+    intro_template_str = cfg.get("table_description_template_intro", "Esquema tabla `{esquema}`.`{tabla}`: {custom_table_desc_or_default}\nColumnas:")
+
+    for row in schema_rows:
+        s_name = str(row.get("esquema", "dbo")).strip(); t_name = str(row.get("tabla", "")).strip(); c_name = str(row.get("columna", "")).strip()
+        if not t_name or not c_name: continue
+        key = (s_name, t_name)
+        if key not in tables_info:
+            tables_info[key] = {"columns": [], "schema": s_name, "table": t_name, "description": custom_table_descs.get(f"{s_name}.{t_name}", default_desc)}
+        
+        c_type = str(row.get("tipo", "N/A")); c_len = row.get("longitud"); c_len_str = f"({int(c_len)})" if c_len and isinstance(c_len, (int,float)) and c_len > 0 else ""
+        c_col_desc = str(row.get("descripcion", "")).strip()
+        
+        # Corrección del KeyError 'fk_tabla'
+        fk_table_val = row.get("ReferenceTableName", "") # Obtener con default
+        fk_col_val = row.get("ReferenceColumnName", "")   # Obtener con default
+        is_fk = bool(row.get("ForeignKey")) # Asumir que 'ForeignKey' es un indicador booleano o convertible
+        fk_info_str = f"FK a `{fk_table_val}`.`{fk_col_val}`" if is_fk and fk_table_val and fk_col_val else ""
+
+        tables_info[key]["columns"].append(col_template_str.format(
+            columna=c_name, tipo=c_type, longitud_str=c_len_str, 
+            descripcion_columna=c_col_desc or "Sin descripción.", 
+            fk_info=fk_info_str, # Usar la variable construida
+            permite_nulos=str(row.get("permite_nulos_vista", "N/A")).upper(), 
+            es_autonumerico=str(row.get("es_autonumerico_vista", "N/A")).upper(),
+            # Añadir fk_tabla y fk_col al dict de format si tu template LOS USA INDIVIDUALMENTE
+            fk_tabla=fk_table_val, 
+            fk_col=fk_col_val,
+            esquema=s_name, # Para que estén disponibles en el column_template si se necesitan
+            tabla=t_name
+        ))
+    
+    schema_langchain_docs: List[LangchainCoreDocument] = []
+    for key, data in tables_info.items():
+        intro = intro_template_str.format(esquema=data["schema"], tabla=data["table"], custom_table_desc_or_default=data["description"])
+        cols_str = "\n".join(data["columns"])
+        content = f"{intro}\n{cols_str}"
+        metadata = {"source_type": "DATABASE_SCHEMA", "db_connection_name": db_conn_to_use.name,"db_name_source": db_conn_to_use.database_name, "schema_name_source": data["schema"],"table_name_source": data["table"],}
+        schema_langchain_docs.append(LangchainCoreDocument(page_content=content, metadata=metadata))
+    
+    if not schema_langchain_docs: print("    DB_SCHEMA: No se generaron docs de esquema."); return
+    chunk_s = cfg.get("db_schema_chunk_size", DEFAULT_DB_SCHEMA_CHUNK_SIZE)
+    chunk_o = cfg.get("db_schema_chunk_overlap", DEFAULT_DB_SCHEMA_CHUNK_OVERLAP)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_s, chunk_overlap=chunk_o)
+    final_chunks = splitter.split_documents(schema_langchain_docs)
+    if not final_chunks: print("    DB_SCHEMA: No chunks de esquema generados."); return
+    print(f"    DB_SCHEMA: Chunks de esquema: {len(final_chunks)}. Añadiendo metadata de contexto...")
+    for chunk in final_chunks: chunk.metadata.update({'context_id':context_def.id, 'context_name':str(context_def.name),'context_main_type':str(context_def.main_type.value)})
+    try: vector_store.add_documents(documents=final_chunks); print(f"    DB_SCHEMA_CTX_PROC: Chunks de esquema de '{context_def.name}' INGESTADOS OK.")
+    except Exception as e: print(f"    ERROR DB_SCHEMA_CTX_PROC: Ingesta chunks esquema: {e}"); traceback.print_exc()
+
+async def run_ingestion_pipeline():
+    print(f"--- Iniciando Pipeline de Ingesta (Colección: {PGVECTOR_MAIN_COLLECTION_NAME}) ---")
+    sbert_embeddings = get_sbert_embeddings_instance()
+    pgvector_sync_url = settings.SYNC_DATABASE_VECTOR_URL 
+    if not pgvector_sync_url: print("ERROR CRÍTICO INGESTA: SYNC_DATABASE_VECTOR_URL no config."); return
+    print(f"INGESTA: Configurando VectorStore PGVector SÍNCRONO: URL='{pgvector_sync_url}', Colección='{PGVECTOR_MAIN_COLLECTION_NAME}'")
+    
+    global_vector_store: Optional[PGVector] = None
+    try:
+        global_vector_store = PGVector(connection=pgvector_sync_url, embeddings=sbert_embeddings, collection_name=PGVECTOR_MAIN_COLLECTION_NAME, use_jsonb=True, pre_delete_collection=False, async_mode=False, create_extension=False)
+        print("INGESTA: VectorStore PGVector (SYNC) listo.")
+    except Exception as e: print(f"ERROR CRÍTICO INGESTA: inicializando VectorStore: {e}"); traceback.print_exc(); return
+
+    async with AsyncSessionLocal_CRUD() as db_session:
+        print("INGESTA: Consultando ContextDefinitions activos...")
+        stmt = (select(ContextDefinition).filter(ContextDefinition.is_active == True)
+            .options(
+                selectinload(ContextDefinition.document_sources), 
+                selectinload(ContextDefinition.db_connection_config), # CORREGIDO
+                selectinload(ContextDefinition.default_llm_model_config),
+                selectinload(ContextDefinition.virtual_agent_profile)
+            ))
+        active_contexts = (await db_session.execute(stmt)).scalars().unique().all()
+        if not active_contexts: print("INGESTA: No ContextDefinitions activos."); return
+        print(f"INGESTA: {len(active_contexts)} ContextDefinitions activos encontrados.")
+
+        for ctx in active_contexts:
+            if global_vector_store is None: continue
+            print(f"\nINGESTA: Procesando Contexto: '{ctx.name}' (ID: {ctx.id}, Tipo: {ctx.main_type.value})")
+            if ctx.main_type == ContextMainType.DOCUMENTAL:
+                if not ctx.document_sources: print(f"  INFO: '{ctx.name}' (DOCUMENTAL) sin DocumentSources."); continue
+                for doc_src in ctx.document_sources:
+                    # Ejecutar la función síncrona en un hilo separado
+                    await asyncio.to_thread(process_document_source_content, doc_src, ctx, global_vector_store)
+            elif ctx.main_type == ContextMainType.DATABASE_QUERY:
+                await process_database_query_context(ctx, global_vector_store) # Ya es async
+            else: print(f"  ADVERTENCIA: Tipo '{ctx.main_type.value}' no soportado.")
+        print("\n--- Pipeline de Ingesta Completado ---")
+
+async def main_ingest_script_entrypoint():
+    try: await run_ingestion_pipeline()
+    finally:
+        print("INGESTA: Script finalizado."); 
+        if async_engine_crud: await async_engine_crud.dispose(); print("INGESTA: Engine CRUD async dispuesto.")
+        global _sync_crud_engine_for_ingest; 
+        if _sync_crud_engine_for_ingest: _sync_crud_engine_for_ingest.dispose(); print("INGESTA: Engine CRUD síncrono (ingesta) dispuesto.")
+            
+if __name__ == "__main__":
+    print("+++ Ejecutando SCRIPT DE INGESTA (Async Principal) +++")
+    asyncio.run(main_ingest_script_entrypoint())

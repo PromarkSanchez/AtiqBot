@@ -1,0 +1,33 @@
+# app/models/api_client.py
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON # type: ignore
+from sqlalchemy.sql import func # type: ignore
+from app.db.session import Base_CRUD # Estará en la BD de CRUDs
+
+class ApiClient(Base_CRUD):
+    __tablename__ = "api_clients"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(100), unique=True, nullable=False, index=True) # Ej. "Bot WhatsApp Alumnos"
+    
+    # Usaremos esta columna para almacenar un HASH del API Key
+    # Por ahora, por simplicidad para el CRUD admin, la usaremos para almacenar el key en texto plano,
+    # pero lo marcaremos como sensible y con un TODO para hash_api_key.
+    hashed_api_key = Column(String(255), unique=True, nullable=False) # Debería ser hashed
+    # TODO: Implementar hashing de la API key para producción.
+    # Por ahora, para simplicidad para el CRUD de admin, la almacenaremos como string,
+    # pero debe ser manejada con cuidado y se le aplicará hash en prod.
+    
+    description = Column(Text, nullable=True) # Descripción del cliente, su uso.
+    
+    is_active = Column(Boolean, default=True, nullable=False) # Para activar/desactivar el API Key
+
+    # Un JSON para almacenar configuraciones/permisos predeterminados asociados a este cliente
+    # Esto es para las "Restricciones" que mencionaste, como qué rol tendrá un usuario por defecto,
+    # o a qué contextos tienen acceso sin sobreescribir permisos de usuario individual.
+    settings = Column(JSON, nullable=True) # Ejemplo: {"default_role": "guest", "allowed_contexts": ["document_a", "dw_finances"]}
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<ApiClient(id={self.id}, name='{self.name}', is_active={self.is_active})>"

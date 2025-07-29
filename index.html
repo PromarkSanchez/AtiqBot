@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hered-IA - Prueba Funcional</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --upch-color-granate: #A31D21; 
+            --upch-dorado: #F5A422; 
+            --fondo-chat: #F0F4F8;
+            --bot-message-bg: #E9ECEF;
+            --user-message-bg: var(--upch-color-granate); 
+            --texto-claro: #FFFFFF; 
+            --texto-oscuro: #333333; 
+            --borde-suave: #E0E0E0;
+            --fuente-principal: 'Poppins', sans-serif;
+        }
+        body { font-family: var(--fuente-principal); background-color: #f8f9fa; margin: 20px; }
+        h1 { text-align: center; color: var(--upch-color-granate); }
+        
+        #chatbot-container-wrapper {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        #chatbot-window {
+            width: 380px;
+            height: 600px;
+            background-color: var(--texto-claro);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin-bottom: 15px; /* Separación de la ventana y el botón */
+            transform: scale(0.95) translateY(20px);
+            opacity: 0;
+            transform-origin: bottom right;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+            pointer-events: none; /* No se puede hacer clic cuando está oculta */
+        }
+
+        #chatbot-window.open {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+            pointer-events: auto; /* Se puede hacer clic cuando está visible */
+        }
+        
+        /* Resto del CSS se mantiene igual, con pequeñas adaptaciones si fueran necesarias */
+        #chatbot-header {
+            background: var(--upch-color-granate);
+            color: var(--texto-claro); padding: 16px 20px; font-weight: 600;
+            display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--upch-dorado); flex-shrink: 0;
+        }
+        #chatbot-header-title { display: flex; align-items: center; gap: 12px; }
+        #chatbot-header-title img { width: 35px; height: 35px; border-radius: 50%; border: 2px solid var(--upch-dorado); object-fit: cover; }
+        #chatbot-header-title span { font-size: 1.1em; font-weight: 700; }
+        #chatbot-close-btn { background: none; border: none; color: var(--texto-claro); cursor: pointer; opacity: 0.7; transition: opacity 0.2s; padding: 5px; }
+        #chatbot-close-btn:hover { opacity: 1; }
+        #chatbot-close-btn svg { width: 24px; height: 24px; }
+        #chatbot-messages { flex-grow: 1; padding: 20px; overflow-y: auto; background-color: var(--fondo-chat); display: flex; flex-direction: column; gap: 12px; }
+        .message-wrapper { display: flex; flex-direction: column; max-width: 85%; }
+        .message { padding: 12px 18px; border-radius: 20px; line-height: 1.5; word-wrap: break-word; }
+        .bot-message-wrapper { align-self: flex-start; } .user-message-wrapper { align-self: flex-end; }
+        .bot-message { background-color: var(--bot-message-bg); color: var(--texto-oscuro); border-bottom-left-radius: 5px; }
+        .user-message { background-color: var(--user-message-bg); color: var(--texto-claro); border-bottom-right-radius: 5px; }
+        .message-enter { animation: slideUpAndFadeIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+        @keyframes slideUpAndFadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .bot-message ul, .bot-message ol { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
+        .bot-message a { color: var(--upch-color-granate); text-decoration: underline; font-weight: 600; }
+        #chatbot-input-form { display: flex; padding: 12px; border-top: 1px solid var(--borde-suave); background-color: var(--texto-claro); align-items: center; gap: 10px; flex-shrink: 0; }
+        #chatbot-input { flex-grow: 1; border: none; padding: 12px 0; font-size: 1em; outline: none; background-color: transparent; font-family: var(--fuente-principal); }
+        #chatbot-send-btn { background: var(--upch-color-granate); border: none; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s; }
+        #chatbot-send-btn:disabled { background: #cccccc; cursor: not-allowed; }
+
+        #chatbot-toggle-button {
+            width: 60px; height: 60px; background-color: var(--upch-color-granate);
+            border-radius: 50%; border: 3px solid var(--upch-dorado); cursor: pointer; display: flex; align-items: center;
+            justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, opacity 0.3s;
+            flex-shrink: 0;
+        }
+        #chatbot-toggle-button:hover { transform: scale(1.1); box-shadow: 0 6px 18px rgba(0,0,0,0.3); }
+        #chatbot-toggle-button svg { width: 30px; height: 30px; color: var(--texto-claro); }
+        /* Oculta el botón cuando la ventana está abierta */
+        #chatbot-window.open ~ #chatbot-toggle-button {
+            transform: scale(0);
+            opacity: 0;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Tutor Academico de (MATE-BASICA) Hered-IA</h1>
+    <!-- CAMBIO ESTRUCTURAL: La ventana ahora va PRIMERO, y el botón DESPUÉS, como hermanos directos. -->
+    <div id="chatbot-container-wrapper">
+        <div id="chatbot-window">
+            <div id="chatbot-header">
+                <div id="chatbot-header-title">
+                    <img src="https://i.imgur.com/q4hZ5Hq.png" alt="Logo UPCH"> <!-- Usando un logo de marcador de posición -->
+                    <span>Hered-IA (MATE-BASICA)</span>
+                </div>
+                <button id="chatbot-close-btn" title="Cerrar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z"/></svg>
+                </button>
+            </div>
+            <div id="chatbot-messages"></div>
+            <form id="chatbot-input-form">
+                <input type="text" id="chatbot-input" placeholder="Escribe tu mensaje..." autocomplete="off">
+                <button type="submit" id="chatbot-send-btn" title="Enviar" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z"/></svg>
+                </button>
+            </form>
+        </div>
+        <button id="chatbot-toggle-button" title="Abrir Asistente">
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4.804 21.644A6.707 6.707 0 006 21.75a6.721 6.721 0 003.583-1.029c.774.182 1.584.279 2.417.279c5.333 0 9.667-3.582 9.667-8s-4.334-8-9.667-8S2.333 7.582 2.333 12c0 1.34.213 2.623.601 3.822.188.59.432 1.15.728 1.684A6.72 6.72 0 004.804 21.644zM6.75 12.75a.75.75 0 000-1.5H5.25a.75.75 0 000 1.5h1.5zm-1.5-3a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H6a.75.75 0 01-.75-.75v-.008zm5.25.75a.75.75 0 00-1.5 0h.008a.75.75 0 001.5 0h-.008zM12 9a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008A.75.75 0 0112 9v-.008z"/></svg>
+        </button>
+    </div>
+<script>
+// El JavaScript no necesitaba cambios, el problema era 100% estructural (HTML/CSS).
+// Este bloque de JS es funcional.
+document.addEventListener('DOMContentLoaded', function() {
+    const chatWindow = document.getElementById('chatbot-window');
+    const toggleButton = document.getElementById('chatbot-toggle-button');
+    const closeButton = document.getElementById('chatbot-close-btn');
+    const messagesContainer = document.getElementById('chatbot-messages');
+    const chatForm = document.getElementById('chatbot-input-form');
+    const chatInput = document.getElementById('chatbot-input');
+    const sendButton = document.getElementById('chatbot-send-btn');
+	
+	 const API_BASE_URL = "http://localhost:8000";
+    const API_KEY = "sU085iuxZerQezsw8lYPFNrkwP0J4zTeCbgwHGnam_E";
+    const APP_ID = "WEB_MATE_BASICA";
+	
+	const prefix = "888";
+    // Genera 5 dígitos aleatorios y se asegura de que tenga 5 caracteres (ej. 00123)
+    const randomDigits = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    let userIdentifier = prefix + randomDigits; // Crea el ID final, ej: "88801234"
+    
+	console.log(userIdentifier)
+ 	
+   
+    const toggleChat = (forceOpen = null) => {
+        const isOpen = chatWindow.classList.contains('open');
+        if (forceOpen === true || (forceOpen === null && !isOpen)) {
+            chatWindow.classList.add('open');
+            if (messagesContainer.children.length === 0) { 
+                initializeChat(); 
+            }
+            chatInput.focus();
+        } else {
+            chatWindow.classList.remove('open');
+        }
+    };
+    
+    const initializeChat = async () => {
+        await sendMessageToAPI("__INICIAR_CHAT__");
+    };
+
+    const handleUserInput = async (event) => {
+        event.preventDefault();
+        const userMessage = chatInput.value.trim();
+        if (!userMessage) return;
+        addMessage(userMessage, 'user');
+        chatInput.value = '';
+        updateSendButtonState();
+        await sendMessageToAPI(userMessage);
+    };
+
+    async function sendMessageToAPI(userMessage) {
+        showTypingIndicator(true);
+        setInputsDisabled(true);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY,
+                    'X-Application-ID': APP_ID
+                },
+                body: JSON.stringify({
+                    dni: userIdentifier,
+                    message: userMessage                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Error ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            addMessage(data.bot_response, 'bot');
+
+        } catch (error) {
+            console.error("Error al contactar la API:", error);
+            addMessage('Lo siento, he encontrado un problema. Por favor, intenta de nuevo.', 'bot');
+        } finally {
+            showTypingIndicator(false);
+            setInputsDisabled(false);
+        }
+    }
+    
+    function addMessage(text, sender) {
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = `message-wrapper ${sender}-message-wrapper message-enter`;
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${sender}-message`;
+        messageElement.textContent = text;
+        messageWrapper.appendChild(messageElement);
+        messagesContainer.appendChild(messageWrapper);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    function setInputsDisabled(disabled) {
+        chatInput.disabled = disabled;
+        sendButton.disabled = disabled;
+        if (!disabled) { chatInput.focus(); updateSendButtonState(); }
+    }
+
+    function showTypingIndicator(show) {
+        let indicator = messagesContainer.querySelector('.typing-indicator');
+        if (show && !indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'message-wrapper bot-message-wrapper';
+            indicator.innerHTML = '<div class="message typing-indicator"><span></span><span></span><span></span></div>';
+            messagesContainer.appendChild(indicator);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else if (!show && indicator) {
+            indicator.remove();
+        }
+    }
+    
+    function updateSendButtonState() {
+        sendButton.disabled = chatInput.value.trim() === '';
+    }
+
+    toggleButton.addEventListener('click', () => toggleChat());
+    closeButton.addEventListener('click', () => toggleChat(false));
+    chatForm.addEventListener('submit', handleUserInput);
+    chatInput.addEventListener('input', updateSendButtonState);
+});
+</script>
+</body>
+</html>

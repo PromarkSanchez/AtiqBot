@@ -1,0 +1,40 @@
+INICIO DEL PROMPT
+Hola, soy Perseo y estamos en la recta final de nuestro proyecto de chatbot. Te pido que revises este resumen para continuar donde lo dejamos:
+Objetivo Principal del Proyecto (Logrado en Gran Medida):
+Construir un chatbot configurable con IA (usando modelos como Gemini/OpenAI), con gestión de permisos por roles, capaz de conectarse a diversas fuentes de contexto (documentos, bases de datos como SQL Server, PostgreSQL, etc.), y exponerlo vía API (FastAPI), gestionado a través de un panel de administración avanzado.
+Estado Actual del Proyecto (Componentes CLAVE YA FUNCIONALES):
+Backend y Lógica de Chat: El backend de FastAPI, las bases de datos (PostgreSQL, PGVector), la ingesta de datos y los flujos de RAG/Text-to-SQL están completamente funcionales.
+Frontend de Administración (React + Vite + Tailwind): El panel de administración consume exitosamente las APIs del backend para la gestión CRUD de todos los recursos principales (Contextos, Fuentes, Conexiones, Clientes API, etc.).
+Sistema de Permisos Dinámicos (Implementación Completa y Avanzada):
+Backend: Se ha refactorizado la seguridad de la API. Los endpoints ya no están protegidos por roles fijos ("hardcodeados"). En su lugar, utilizan una dependencia require_permission que verifica si el rol del usuario tiene permiso para acceder a un menú específico, cuyo nombre está definido como una constante (ej., MENU_GESTION_USUARIOS). La lógica consulta dinámicamente la tabla admin_role_menu_permissions en la base de datos. El SuperAdmin tiene un bypass para acceder a todo.
+Frontend:
+Gestión de Menús: La página /admin/menus es funcional. Permite al SuperAdmin crear, editar, eliminar y estructurar la jerarquía (padres/hijos) de todos los menús de navegación del panel.
+Gestión de Permisos por Rol: La página de edición de roles (/admin/roles) ha sido potenciada. Ahora muestra una lista de todos los menús del sistema con checkboxes, permitiendo asignar o revocar permisos de acceso a cada menú para un rol específico. La lógica de submit maneja las llamadas a la API para añadir/quitar estos permisos.
+Protección de Rutas (Autorización REAL): Se implementó una lógica de protección robusta en AdminLayout.tsx. Al navegar, el sistema verifica en el lado del cliente si el usuario tiene permiso para la ruta solicitada. Si no lo tiene, es redirigido a una ruta segura o a una página de "Acceso Denegado", previniendo el acceso no autorizado incluso si la URL se escribe manualmente.
+Autenticación Multifactor (MFA) para Administradores (Implementación Completa):
+Backend: Todos los endpoints (/mfa/setup-initiate, /mfa/setup-confirm) y la lógica de login de dos pasos (/login, /verify-mfa) están implementados y funcionales. Los tokens JWT ahora contienen claims mfa_enabled y mfa_completed que reflejan el estado real del usuario.
+Frontend:
+La página de Configuración de Seguridad permite a un usuario activar su MFA. El flujo de escanear el QR (generado en el frontend con qrcode.react) y confirmar con el código TOTP está funcionando correctamente.
+La página de Login maneja el flujo de dos pasos: pide credenciales y, si el MFA está activado, pide el código TOTP antes de conceder acceso.
+El AuthContext decodifica el token JWT, almacena el estado de mfa_enabled y lo hace disponible para toda la aplicación, permitiendo que la UI reaccione correctamente.
+Tareas Pendientes PRINCIPALES:
+Query Cache (Redis):
+Objetivo: Implementar una caché en Redis para respuestas a preguntas frecuentes (RAG y Text-to-SQL), para mejorar la velocidad y reducir costos de LLM.
+Tareas:
+Backend: Configurar cliente Redis, modificar el endpoint /api/v1/chat/ para que primero consulte la caché. Si hay "cache miss", procesar la pregunta y guardar el resultado en Redis con un TTL.
+Impacto: Mejora de rendimiento y ahorro de costos.
+Feedback de Usuario (Like/Dislike):
+Objetivo: Permitir a los usuarios finales calificar la utilidad de las respuestas del chatbot.
+Tareas:
+Backend: Añadir columnas feedback_score (int) y feedback_comment (text) a interaction_logs. Crear endpoint POST /api/v1/feedback/{interaction_log_id}.
+Frontend (del chat): Añadir botones 👍/👎 y lógica de llamada a la API.
+Impacto: Recopilación de datos cruciales para la mejora continua.
+Optimización de Prompts:
+Objetivo: Mejorar iterativamente la calidad y precisión de las respuestas del chatbot.
+Tareas: Analizar logs y feedback para refinar los prompts de RAG y Text-to-SQL.
+Próximo Paso Sugerido (Con el que vamos a empezar ahora):
+Propongo que nos enfoquemos en la Tarea 1: Query Cache con Redis.
+Este paso es una optimización técnica importante que aportará un valor tangible e inmediato en términos de velocidad y eficiencia de costos. Una vez que el chatbot sea más rápido, podemos pasar a medir y mejorar la calidad de sus respuestas con el sistema de feedback.
+¿Te parece bien este plan para continuar? ¡Estamos listos para implementar Redis!
+FIN DEL PROMPT
+Este prompt captura todo lo logrado y establece un punto de partida claro para nuestro siguiente chat. ¡Un placer haber trabajado contigo en esta fase tan crucial, Perseo! Nos vemos en la próxima.

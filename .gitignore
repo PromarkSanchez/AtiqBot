@@ -1,0 +1,140 @@
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cython files
+*.c
+*.cpp
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+venv.bak/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# VSCode
+.vscode/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pylint
+pylint-report.txt
+
+# Django stuff
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# dotenv
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Others
+*.log
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# dotenv environment variables
+.env
+.env.*.local
+
+# Next.js or other frameworks
+.next/
+.out/
+.nuxt/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+*.lcov
+
+# TypeScript
+*.tsbuildinfo
+
+# Parcel
+.cache/
+
+# React Native
+.expo/
+

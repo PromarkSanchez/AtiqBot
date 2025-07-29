@@ -1,0 +1,73 @@
+select * from app_user
+
+select * from  roles
+select * from user_role_association
+insert roles values ('','Rol del super admin')
+{
+  "name": "SuperAdmin",
+  "description": "Rol del super admin"
+}
+select * from admin_panel_menus
+
+namestring[3, 100] characters
+frontend_routestring[1, 255] characters
+icon_nameExpand all(string | null)
+parent_idExpand all(integer | null)
+display_orderExpand allinteger
+
+INSERT INTO admin_role_menu_permissions (role_id, menu_id,can_view)
+SELECT 1, id,'true' FROM admin_panel_menus;
+
+select * from admin_role_menu_permissions
+
+-- Menú Padre: Configuración General (no tiene ruta real, es un agrupador)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order) 
+VALUES ('Configuración General', '#config', 'Cog6ToothIcon', 10) RETURNING id; 
+-- Suponiendo que esto devuelve el id = 1
+
+-- Menú Padre: Configuración de Contexto
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order) 
+VALUES ('Configuración de Contexto', '#context', 'CommandLineIcon', 20) RETURNING id; 
+-- Suponiendo que esto devuelve el id = 2
+
+
+-- Menús Hijos de "Configuración General" (parent_id = 1)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order, parent_id) VALUES
+('Usuarios Admin', '/admin/users', 'UsersIcon', 11, 1),
+('Roles y Permisos', '/admin/roles', 'ShieldCheckIcon', 12, 1),
+('Clientes API', '/admin/api-clients', 'KeyIcon', 13, 1);
+
+
+-- Menús Hijos de "Configuración de Contexto" (parent_id = 2)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order, parent_id) VALUES
+('Definición de Contextos', '/admin/context-definitions', 'CommandLineIcon', 21, 2),
+('Fuentes de Documentos', '/admin/doc-sources', 'FolderIcon', 22, 2),
+('Conexiones a BD', '/admin/db-connections', 'CircleStackIcon', 23, 2);
+
+
+-- Menús de Nivel Superior (sin padre)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order) VALUES
+('Probar Chat', '/admin/test-chat', 'ChatBubbleLeftRightIcon', 100);
+
+-- Añadir el menú para la propia gestión de menús, dentro de "Configuración General" (parent_id = 1)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order, parent_id) 
+VALUES ('Gestión de Menús', '/admin/menus', 'ListBulletIcon', 14, 1); -- Ajusta el display_order si es necesario
+
+-- Asignar permiso a SuperAdmin (role_id = 1) para este nuevo menú
+-- Asume que el ID del menú que acabamos de crear es 10 (o el siguiente ID disponible)
+-- Para estar seguro, puedes consultar el ID recién creado: SELECT id FROM admin_panel_menus WHERE name = 'Gestión de Menús';
+INSERT INTO admin_role_menu_permissions (role_id, menu_id) VALUES (1, 10); -- Reemplaza 10 con el ID correcto
+
+
+-- Asumiendo que quieres un menú padre "Mi Perfil" o similar
+-- Si no existe, créalo primero:
+-- INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order) 
+-- VALUES ('Mi Perfil', '#profile', 'UserCircleIcon', 200) RETURNING id;
+
+-- Añadir el menú de seguridad (asumiendo que el parent_id de "Mi Perfil" es, por ejemplo, 11)
+INSERT INTO admin_panel_menus (name, frontend_route, icon_name, display_order, parent_id)
+VALUES ('Seguridad y MFA', '/admin/profile/security', 'ShieldCheckIcon', 201, 11);
+
+-- Asignar permiso al rol que corresponda
+INSERT INTO admin_role_menu_permissions (role_id, menu_id) VALUES (1, (SELECT id FROM admin_panel_menus WHERE name = 'Seguridad y MFA'));
+

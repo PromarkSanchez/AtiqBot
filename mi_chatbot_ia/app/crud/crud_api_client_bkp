@@ -1,0 +1,114 @@
+# app/crud/crud_api_client.py
+import secrets # Para generar API keys
+from typing import Optional, List, Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession # type: ignore
+from sqlalchemy.future import select # type: ignore
+ 
+from app.models.api_client import ApiClient as ApiClientModel
+
+# Importamos UserBase de app.schemas, y luego definimos un schema para la creación/actualización de ApiClient.
+from pydantic import BaseModel, constr # type: ignore
+# --- NUEVA FUNCIÓN ---
+async def get_api_client_by_name(db: AsyncSession, name: str) -> Optional[ApiClientModel]:
+    """
+    Obtiene un ApiClient por su nombre (debe ser único).
+    """
+    result = await db.execute(select(ApiClientModel).filter(ApiClientModel.name == name))
+    return result.scalars().first()
+
+class ApiClientCreate(BaseModel):
+    name: constr(min_length=3, max_length=100) # type: ignore
+    description: Optional[str] = None
+    is_active: bool = True
+    settings: Optional[Dict[str, Any]] = None # Para datos JSON de configuración
+
+class ApiClientUpdate(BaseModel):
+    name: Optional[constr(min_length=3, max_length=100)] = None # type: ignore
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    settings: Optional[Dict[str, Any]] = None # Permitir actualizar settings
+    # No permitimos actualizar directamente 'api_key' por seguridad;
+    # tendríamos una función separada para 'regenerar' una API Key.
+
+class ApiClientResponse(BaseModel):
+    id: int
+    name: str
+    # NO DEVOLVEMOS EL API KEY AQUÍ directamente por seguridad.
+    # El API key solo se devuelve al crear o regenerar, para que el admin lo copie.
+    description: Optional[str] = None
+    is_active: bool
+    settings: Optional[Dict[str, Any]] = None
+    created_at: str # Convertir a string para Pydantic
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+async def create_api_client(db: AsyncSession, api_client_in: ApiClientCreate) -> ApiClientModel:
+    """
+    Crea un nuevo ApiClient con una API key autogenerada.
+    """
+    api_key_generated = secrets.token_urlsafe(32) # Genera una cadena segura (base64 urlsafe) de 32 bytes
+    # Para hashing: api_key_hashed = hash_api_key(api_key_generated)
+    # Por ahora, la guardamos tal cual para simplicidad del CRUD y su exportación.
+    
+    db_api_client = ApiClientModel(
+        name=api_client_in.name,
+        hashed_api_key=api_key_generated, # Por ahora guardamos la clave directamente (TEMPORALMENTE)
+        description=api_client_in.description,
+        is_active=api_client_in.is_active,
+        settings=api_client_in.settings
+    )
+    db.add(db_api_client)
+    await db.commit()
+    await db.refresh(db_api_client)
+    # Para esta función de CREATE, SÍ necesitamos devolver la clave recién generada
+    # al administrador.
+    db_api_client.temp_api_key_plain = api_key_generated # Atributo temporal no persistente para el retorno
+    return db_api_client
+
+
+async def get_api_client_by_id(db: AsyncSession, api_client_id: int) -> Optional[ApiClientModel]:
+    result = await db.execute(select(ApiClientModel).filter(ApiClientModel.id == api_client_id))
+    return result.scalars().first()
+
+async def get_api_client_by_key(db: AsyncSession, api_key: str) -> Optional[ApiClientModel]:
+    """
+    Busca un ApiClient por su API Key (usado en la autenticación de la API).
+    En un sistema de producción, se usaría el hash de la API key.
+    """
+    # Si guardaras el hash, la consulta sería así:
+    # await db.execute(select(ApiClientModel).filter(ApiClientModel.hashed_api_key == hash_api_key(api_key)))
+    result = await db.execute(select(ApiClientModel).filter(ApiClientModel.hashed_api_key == api_key))
+    return result.scalars().first()
+
+async def get_api_clients(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[ApiClientModel]:
+    result = await db.execute(select(ApiClientModel).offset(skip).limit(limit))
+    return result.scalars().all()
+
+async def update_api_client(db: AsyncSession, db_api_client: ApiClientModel, api_client_in: ApiClientUpdate) -> ApiClientModel:
+    update_data = api_client_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_api_client, field, value)
+    
+    db.add(db_api_client)
+    await db.commit()
+    await db.refresh(db_api_client)
+    return db_api_client
+
+async def regenerate_api_key(db: AsyncSession, db_api_client: ApiClientModel) -> ApiClientModel:
+    new_api_key = secrets.token_urlsafe(32)
+    db_api_client.hashed_api_key = new_api_key # o hash_api_key(new_api_key)
+    db.add(db_api_client)
+    await db.commit()
+    await db.refresh(db_api_client)
+    db_api_client.temp_api_key_plain = new_api_key # Atributo temporal
+    return db_api_client
+
+async def delete_api_client(db: AsyncSession, api_client_id: int) -> Optional[ApiClientModel]:
+    api_client_to_delete = await get_api_client_by_id(db, api_client_id)
+    if api_client_to_delete:
+        await db.delete(api_client_to_delete)
+        await db.commit()
+        return api_client_to_delete
+    return None

@@ -1,0 +1,294 @@
+# app/api/endpoints/chat_api_endpoints.py - [PARTE 1/4]
+
+import time
+import traceback
+import asyncio
+from typing import Dict, Any, List
+import json
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+
+from langchain_core.messages import HumanMessage, AIMessage, get_buffer_string
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document as LangchainCoreDocument
+
+from app.db.session import get_crud_db_session
+from app.models.api_client import ApiClient as ApiClientModel
+from app.models.context_definition import ContextDefinition, ContextMainType
+from app.models.virtual_agent_profile import VirtualAgentProfile
+from app.schemas.schemas import ChatRequest, ChatResponse
+from app.crud import create_interaction_log, crud_virtual_agent_profile, crud_llm_model_config
+from app.config import settings
+from app.security.api_key_auth import get_validated_api_client
+from app.core.app_state import get_sync_vector_store, get_cached_llm_adapter
+from ._chat_history_logic import FullyCustomChatMessageHistory
+from app.services import cache_service
+from app.tools.sql_tools import run_db_query_chain
+
+router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
+
+# --- Constantes y Helpers ---
+CONV_STATE_AWAITING_NAME = "awaiting_name_confirmation"
+CONV_STATE_AWAITING_TOOL_PARAMS = "awaiting_tool_parameters"
+MAX_CLARIFICATION_ATTEMPTS = 2
+
+async def _handle_human_handoff(uid: str, q: str) -> Dict[str, str]:
+    ticket_id = f"TICKET-{int(time.time())}"
+    return {"ticket_id": ticket_id, "response_text": f"He creado un ticket de soporte ({ticket_id})."}
+# app/api/endpoints/chat_api_endpoints.py - [PARTE 2/4]
+
+@router.post("/", response_model=ChatResponse)
+async def process_chat_message(
+    req: ChatRequest,
+    db: AsyncSession = Depends(get_crud_db_session),
+    client: ApiClientModel = Depends(get_validated_api_client)
+):
+    start_time, question, s_id = time.time(), req.message, req.session_id
+    log: Dict[str, Any] = {
+        "user_dni": req.user_dni or s_id,
+        "api_client_name": client.name,
+        "user_message": question
+    }
+    history = FullyCustomChatMessageHistory(s_id)
+    final_bot_response, metadata_response = "Error inesperado.", {}
+    
+    try:
+        # Usamos un nombre de variable no conflictivo
+        api_client_settings = client.settings or {}
+        allowed_ctx_ids = api_client_settings.get("allowed_context_ids", [])
+        if not allowed_ctx_ids:
+            raise HTTPException(403, "API Key sin contextos.")
+
+        stmt_base = select(ContextDefinition).where(
+            ContextDefinition.id.in_(allowed_ctx_ids),
+            ContextDefinition.is_active == True
+        )
+
+        if req.is_authenticated_user:
+            active_contexts = (await db.execute(
+                stmt_base.options(selectinload(ContextDefinition.db_connection_config))
+            )).scalars().unique().all()
+        else:
+            active_contexts = (await db.execute(
+                stmt_base.filter(ContextDefinition.is_public == True)
+                .options(selectinload(ContextDefinition.db_connection_config))
+            )).scalars().unique().all()
+            
+            # Tu lógica de seguridad, restaurada fielmente
+            if any(kw in question.lower() for kw in getattr(settings, 'DB_INTENT_KEYWORDS', [])):
+                q_private = select(func.count()).select_from(
+                    stmt_base.filter(
+                        ContextDefinition.is_public == False,
+                        ContextDefinition.main_type == ContextMainType.DATABASE_QUERY
+                    ).subquery()
+                )
+                if (await db.execute(q_private)).scalar_one() > 0:
+                    raise StopIteration({
+                        "intent": "AUTH_REQUIRED",
+                        "bot_response": "Para esta consulta, necesito que inicies sesión.",
+                        "metadata_details_json": {"action_required": "request_login"}
+                    })
+        
+        if not active_contexts:
+            raise HTTPException(404, "No hay contextos válidos.")
+        
+        history_list = await asyncio.to_thread(history.messages.copy)
+        main_ctx = active_contexts[0]
+        
+        vap_id = api_client_settings.get(
+            "default_virtual_agent_profile_id_override"
+        ) or main_ctx.virtual_agent_profile_id
+        vap = await crud_virtual_agent_profile.get_fully_loaded_profile(db, vap_id)
+        
+        llm_cfg_id = (api_client_settings.get("default_llm_model_config_id_override") or 
+                    vap.llm_model_config_id or main_ctx.default_llm_model_config_id)
+        llm_config = await crud_llm_model_config.get_llm_model_config_by_id(db, llm_cfg_id)
+        llm = await get_cached_llm_adapter(db, model_config=llm_config)
+        log["llm_model_used"] = llm_config.display_name
+        
+        # <<-- HASTA AQUÍ LLEGA ESTA PARTE. LA PRÓXIMA ES LA MÁQUINA DE ESTADOS -->>
+        # app/api/endpoints/chat_api_endpoints.py - [PARTE 3/4]
+
+        state = cache_service.get_cache(f"chat_state:{s_id}")
+
+        # ETAPA 1: Saludo inicial
+        if not history_list and question == "__INICIAR_CHAT__":
+            chain = ChatPromptTemplate.from_template(vap.greeting_prompt) | llm | StrOutputParser()
+            final_bot_response = await chain.ainvoke({"user_name": req.user_name or "Usuario"})
+            if vap.name_confirmation_prompt:
+                cache_service.set_cache(f"chat_state:{s_id}", CONV_STATE_AWAITING_NAME, 300)
+        
+        # ETAPA 2: Confirmación del nombre
+        elif state == CONV_STATE_AWAITING_NAME:
+            chain = ChatPromptTemplate.from_template(vap.name_confirmation_prompt) | llm | StrOutputParser()
+            final_bot_response = await chain.ainvoke({"user_provided_name": question.strip()})
+            cache_service.delete_cache(f"chat_state:{s_id}")
+        
+        # ETAPA 2.5: Bucle de recolección de parámetros para herramientas de BD
+        elif state == CONV_STATE_AWAITING_TOOL_PARAMS:
+            state_data = cache_service.get_cache(f"tool_state:{s_id}")
+            if not state_data:
+                raise ValueError("Estado de herramienta perdido en Redis.")
+            
+            # --- GUARDIÁN ANTI-BUCLES ---
+            count = state_data.get("clarification_count", 0) + 1
+            if count > MAX_CLARIFICATION_ATTEMPTS:
+                final_bot_response = "Parece que no nos estamos entendiendo. ¿Podrías reformular tu solicitud?"
+                log["intent"] = "TOOL_LOOP_BROKEN"
+                cache_service.delete_cache(f"chat_state:{s_id}")
+                cache_service.delete_cache(f"tool_state:{s_id}")
+            else:
+                # --- LÓGICA DE TU "TANQUE": FORMULARIO INTELIGENTE ---
+                ctx = await db.get(
+                    ContextDefinition, state_data["context_id"],
+                    options=[selectinload(ContextDefinition.db_connection_config)]
+                )
+                if not ctx:
+                    raise ValueError(f"No se pudo recargar el contexto ID {state_data['context_id']}")
+
+                params = state_data.get("partial_parameters", {})
+                missing_name = state_data.get("missing_parameter_info", {}).get("name")
+                if missing_name:
+                    params[missing_name.lower()] = question.strip()
+                
+                db_res = await run_db_query_chain(
+                    question=state_data["original_question"],
+                    chat_history_str=get_buffer_string(history_list),
+                    db_conn_config=ctx.db_connection_config,
+                    processing_config=ctx.processing_config or {},
+                    llm=llm,
+                    user_dni=req.user_dni,
+                    injected_params=params
+                )
+                
+                intent = db_res.get("intent")
+                final_bot_response = db_res.get("final_answer")
+                metadata_response = db_res.get("metadata", {})
+                
+                if intent == "CLARIFICATION_REQUIRED":
+                    state_data.update(metadata_response)
+                    state_data["clarification_count"] = count
+                    cache_service.set_cache(f"tool_state:{s_id}", state_data, 300)
+                else:
+                    cache_service.delete_cache(f"chat_state:{s_id}")
+                    cache_service.delete_cache(f"tool_state:{s_id}")
+                
+                log.update({
+                    "intent": intent, "metadata_details_json": metadata_response
+                })
+        
+        # <<-- HASTA AQUÍ LLEGA ESTA PARTE. LA PRÓXIMA ES LA LÓGICA PARA NUEVAS PREGUNTAS -->>
+        # app/api/endpoints/chat_api_endpoints.py - [PARTE 4/4]
+
+        else:
+            db_ctxs = [c for c in active_contexts if c.main_type == ContextMainType.DATABASE_QUERY]
+            doc_ctxs = [c for c in active_contexts if c.main_type == ContextMainType.DOCUMENTAL]
+            target_context = None
+            is_db_intent = any(kw.lower() in question.lower() for kw in getattr(settings, 'DB_INTENT_KEYWORDS', []))
+
+            # --- SELECTOR DE CONTEXTO REPARADO Y BLINDADO ---
+            if is_db_intent and db_ctxs:
+                target_context = db_ctxs[0]
+            elif not doc_ctxs and db_ctxs:
+                target_context = db_ctxs[0]
+            elif doc_ctxs:
+                target_context = doc_ctxs[0]
+            else:
+                target_context = main_ctx
+
+            log["metadata_details_json"] = {"selected_context": target_context.name}
+            
+            if target_context.main_type == ContextMainType.DATABASE_QUERY:
+                db_res = await run_db_query_chain(question, get_buffer_string(history_list), target_context.db_connection_config, target_context.processing_config or {}, llm, req.user_dni)
+                intent, final_bot_response, metadata_response = db_res.get("intent"), db_res.get("final_answer"), db_res.get("metadata", {})
+                log.update({"intent": intent, "metadata_details_json": metadata_response})
+                
+
+                if intent == "CLARIFICATION_REQUIRED":
+                    state_to_save = {
+                        "original_question": question,
+                        "context_id": target_context.id,
+                        "clarification_count": 0,
+                        **metadata_response
+                    }
+                    cache_service.set_cache(f"chat_state:{s_id}", CONV_STATE_AWAITING_TOOL_PARAMS, 300)
+                    cache_service.set_cache(f"tool_state:{s_id}", state_to_save, 300)
+            
+            elif target_context.main_type == ContextMainType.DOCUMENTAL:
+                log["intent"] = "RAG_DOCUMENTAL"
+                user_name_from_cache = cache_service.get_cache(f"user_name:{s_id}") or req.user_name or "Usuario"
+                
+                # --- Tu lógica RAG, restaurada y corregida ---
+                def run_rag_chain_sync():
+                    condense_q_prompt = PromptTemplate.from_template(settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE)
+                    answer_prompt = ChatPromptTemplate.from_template(vap.system_prompt)
+                    standalone_question_chain = condense_q_prompt | llm | StrOutputParser()
+                    
+                    vector_store = get_sync_vector_store()
+                    retriever = vector_store.as_retriever(
+                        search_kwargs={"k": 4, "filter": {"context_name": target_context.name}}
+                    )
+                    
+                    def format_docs(docs: List[LangchainCoreDocument]):
+                        return "\n\n".join(d.page_content for d in docs)
+
+                    # Construimos la cadena asegurándonos que `chat_history` siempre se pase al prompt final
+                    conversational_rag_chain = (
+                        RunnablePassthrough.assign(
+                            chat_history=lambda x: get_buffer_string(x["chat_history"]),
+                            context=lambda x: retriever.invoke(x["question"]) # Corrección aquí
+                        ).assign(
+                        context=lambda x: format_docs(x["context"])
+                        )
+                        | answer_prompt
+                        | llm
+                        | StrOutputParser()
+                    )
+                    
+                    return conversational_rag_chain.invoke({
+                        "question": question,
+                        "chat_history": history_list
+                    })
+                final_bot_response = await asyncio.to_thread(run_rag_chain_sync)
+
+    except StopIteration as si:
+        update = si.value or {}; log.update(update)
+        final_bot_response = log.get("bot_response", "")
+        metadata_response = log.get("metadata_details_json", {})
+    except Exception as e:
+        traceback.print_exc()
+        handoff = await _handle_human_handoff(req.user_dni or s_id, question)
+        log.update({"error_message": f"Error: {e}", "bot_response": handoff["response_text"]})
+        final_bot_response = log["bot_response"]
+    finally:
+        log.update({
+            "bot_response": final_bot_response,
+            "response_time_ms": int((time.time() - start_time) * 1000)
+        })
+        try:
+            # Aseguramos que los metadatos a loguear sean siempre un JSON válido
+            log_metadata = metadata_response if isinstance(metadata_response, dict) else {}
+            log_to_save = log.copy()
+            log_to_save["metadata_details_json"] = json.dumps(log_metadata, default=str)
+            
+            await create_interaction_log(db, log_to_save)
+            
+            if log.get("bot_response") and not log.get("error_message"):
+                await asyncio.to_thread(
+                    history.add_messages,
+                    [HumanMessage(content=question), AIMessage(content=log["bot_response"])]
+                )
+        except Exception as final_e:
+            print(f"CRITICAL: Fallo al guardar log/historial: {final_e}")
+            
+    return ChatResponse(
+        session_id=s_id,
+        original_message=question,
+        bot_response=log["bot_response"].strip(),
+        metadata_details_json=metadata_response if isinstance(metadata_response, dict) else {}
+    )

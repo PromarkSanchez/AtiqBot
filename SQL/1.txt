@@ -1,0 +1,65 @@
+{
+  "name": "Esquema Data Warehouse Principal",
+  "description": "Contexto que describe la estructura (tablas y columnas) del Data Warehouse BI_ANALYTICS para permitir consultas en lenguaje natural sobre su esquema.",
+  "is_active": true,
+  "main_type": "DATABASE_QUERY",
+  "processing_config": {
+    "schema_info_type": "dictionary_table_sqlserver_custom", // Un tipo para nuestra lógica específica
+    "dictionary_table_query": "SELECT esquema, tabla, columna, tipo, longitud,CASE WHEN nulls = 1 THEN 'Sí' ELSE 'No' END AS permite_nulos,CASE WHEN autonumerico = 1 THEN 'Sí' ELSE 'No' END AS es_autonumerico, descripcion, ForeignKey, ReferenceTableName, ReferenceColumnName FROM [Admin].[V_Admin_ListaTablasColumnas] ORDER BY esquema, tabla, idColumna;",
+    "custom_table_descriptions": {
+        "Admision.AGR_Postulacion": "Registro detallado de postulantes por convocatoria (año/periodo). Contiene IDs de persona y programa. Usar para contar/listar postulantes.",
+        "Academico.AGR_EstudianteMatriculado": "Registro anual único por estudiante matriculado. Usar para conteos anuales de matriculados.",
+        "Generales.DIM_Persona": "Catálogo maestro de personas (alumnos, docentes, postulantes) con DNI y nombre completo. Es la fuente principal para información de individuos.",
+        "Academico.DIM_ProgramaAcademico": "Catálogo de programas académicos (carreras universitarias y técnicas) ofrecidos, con sus nombres oficiales e identificadores únicos.",
+        "Generales.DIM_Periodo": "Catálogo de periodos académicos, usualmente semestrales o anuales, definidos por año y un identificador de periodo."
+        // ... puedes añadir más aquí o cargarlas de otro sitio en el futuro ...
+    },
+    "table_description_template_intro": "La tabla [{esquema}].[{tabla}] se describe como: {custom_table_desc_or_default}. Columnas principales:",
+    "table_description_template_default_desc": "Tabla de datos.", // Si no hay descripción personalizada
+    "column_description_template": "- [{columna}] (Tipo: {tipo}{longitud_str}, Permite Nulos: {permite_nulos}, Autonumérico: {es_autonumerico}): {descripcion_columna}. {fk_info}",
+    "db_schema_chunk_size": 1500, // Puedes ajustar esto, más grande para textos de esquema
+    "db_schema_chunk_overlap": 150
+  },
+  "default_llm_model": null,
+  "document_source_ids": [],
+  "db_connection_ids": [1] // Asume que el ID 1 es tu conexión al DW de SQL Server que ya creaste
+}
+
+
+{
+  "processing_config": {
+    "schema_info_type": "dictionary_table_sqlserver_custom",
+    "dictionary_table_query": "SELECT esquema, tabla, columna, tipo, longitud, nulls AS permite_nulos_vista, autonumerico AS es_autonumerico_vista, descripcion, ForeignKey, ReferenceTableName, ReferenceColumnName, idColumna FROM [Admin].[V_Admin_ListaTablasColumnas] ORDER BY esquema, tabla, idColumna;",
+    "custom_table_descriptions": {
+        "Admision.AGR_Postulacion": "Registro detallado...",
+        "Academico.AGR_EstudianteMatriculado": "Registro anual...",
+        "Generales.DIM_Persona": "Catálogo maestro...",
+        "Academico.DIM_ProgramaAcademico": "Catálogo de programas...",
+        "Generales.DIM_Periodo": "Catálogo de periodos..."
+    },
+    "table_description_template_intro": "La tabla [{esquema}].[{tabla}] se describe como: {custom_table_desc_or_default}. Columnas principales:",
+    "table_description_template_default_desc": "Tabla de datos.",
+    "column_description_template": "- [{columna}] (Tipo: {tipo}{longitud_str}, Permite Nulos: {permite_nulos}, Autonumérico: {es_autonumerico}): {descripcion_columna}. {fk_info}",
+    "db_schema_chunk_size": 1500,
+    "db_schema_chunk_overlap": 150
+  }
+}
+
+{
+  "processing_config": {
+    "schema_info_type": "dictionary_table_sqlserver_custom",
+    "dictionary_table_query": "SELECT esquema, tabla, columna, tipo, longitud, nulls AS permite_nulos_vista, autonumerico AS es_autonumerico_vista, descripcion, ForeignKey, ReferenceTableName, ReferenceColumnName, idColumna FROM [Admin].[V_Admin_ListaTablasColumnas] ORDER BY esquema, tabla, idColumna;",
+    "custom_table_descriptions": {
+        "Admision.AGR_Postulacion": "Registro detallado...",
+        "Academico.AGR_EstudianteMatriculado": "Registro anual...",
+        "Generales.DIM_Persona": "Catálogo maestro...",
+        "Academico.DIM_ProgramaAcademico": "Catálogo de programas...",
+        "Generales.DIM_Periodo": "Catálogo de periodos..."
+    },
+    "table_description_template_intro": "La tabla [{esquema}].[{tabla}] se describe como: {custom_table_desc_or_default}. Columnas principales:",
+    "table_description_template_default_desc": "Tabla de datos.",
+    "column_description_template": "- [{columna}] (Tipo: {tipo}{longitud_str}, Permite Nulos: {permite_nulos}, Autonumérico: {es_autonumerico}): {descripcion_columna}. {fk_info}",
+    "db_schema_chunk_size": 1500,
+    "db_schema_chunk_overlap": 150
+  }
+}

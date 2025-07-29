@@ -1,0 +1,41 @@
+# === requirements.in ===
+# La lista de deseos de nuestro proyecto. Pip se encargará del resto.
+
+# Core del Backend
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncpg] # Importante mantener [asyncpg]
+alembic
+psycopg
+psycopg[binary]
+psycopg2-binary # Drivers para SQLAlchemy
+asyncpg # Driver para SQLAlchemy async
+redis
+
+# Autenticación y Seguridad
+python-multipart
+passlib[bcrypt]
+python-jose[cryptography]
+ldap3
+
+# LANGCHAIN - Forzamos a la última generación estable
+langchain>=0.1.0,<0.2.0
+
+# El resto de dependencias directas
+langchain-community
+langchain-aws
+langchain-postgres
+langchain-openai
+langchain-google-genai
+langchain-text-splitters
+langsmith
+pydantic-settings
+python-dotenv
+sentence-transformers # <<< Dejamos que pip elija la versión compatible
+requests
+# ... tus otras dependencias como qrcode, pyotp, etc.
+qrcode
+pyotp
+unstructured
+pypdf
+python-docx

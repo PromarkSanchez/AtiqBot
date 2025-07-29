@@ -1,0 +1,40 @@
+# Framework y asincronía
+asyncio
+
+# LangChain y relacionados
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-postgres
+sentence-transformers # Para SentenceTransformerEmbeddings
+
+# Cargadores de documentos (instala los que uses)
+pypdf
+docx2txt
+unstructured[xlsx]
+openpyxl
+
+# Conexión a Base de Datos (SQLAlchemy y PostgreSQL)
+sqlalchemy[asyncio]
+psycopg[binary]  # La versión moderna, recomendada. Alternativa: psycopg2-binary
+
+# Conexión a AWS S3
+boto3
+
+# Manejo de configuración (si usas pydantic-settings)
+pydantic-settings
+
+# Mínimo para que el script de ingesta corra
+sqlalchemy[asyncio]
+psycopg[binary]
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-postgres
+sentence-transformers
+pydantic-settings
+boto3
+pypdf
+docx2txt
+unstructured[xlsx]
+openpyxl

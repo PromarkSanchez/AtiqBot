@@ -1,0 +1,7 @@
+# mi_chatbot_ia/documento_ejemplo.txt
+La Universidad Peruana Cayetano Heredia (UPCH) es una institución educativa privada sin fines de lucro ubicada en Lima, Perú.
+Fue fundada en 1961 por un grupo de catedráticos de la Facultad de Medicina de la Universidad Nacional Mayor de San Marcos.
+La UPCH se especializa en ciencias de la salud y ciencias biológicas, siendo reconocida por su excelencia en investigación.
+Ofrece programas de pregrado y posgrado en diversas áreas como medicina, estomatología, enfermería, salud pública, ciencias y filosofía.
+El campus principal se encuentra en el distrito de San Martín de Porres.
+Su misión es formar profesionales líderes con compromiso social.

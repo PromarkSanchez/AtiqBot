@@ -1,0 +1,472 @@
+# app/api/endpoints/chat_api_endpoints.py
+
+# === Python y Librerías de Terceros ===
+import time
+import traceback
+import asyncio
+from typing import Dict, Any, List, Optional
+import json
+from operator import itemgetter
+import re
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+from redis.asyncio import Redis as AsyncRedis
+
+# === LangChain Imports ===
+from langchain_core.messages import HumanMessage, AIMessage, get_buffer_string
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.documents import Document as LangchainCoreDocument
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_postgres.vectorstores import PGVector
+
+# === Imports Locales (La Forma CORRECTA y Centralizada) ===
+# Dependencias para inyección en el endpoint
+from app.api.dependencies import get_crud_db, get_vector_store, get_app_state, get_redis_client
+# Clases y configuración central
+from app.core.app_state import AppState
+from app.config import settings
+# Herramientas de seguridad
+from app.security.api_key_auth import get_validated_api_client
+# Servicios (como el de caché)
+from app.services import cache_service
+
+# CRUD (Importamos las versiones ASÍNCRONAS donde sea necesario)
+from app.crud import crud_virtual_agent_profile, crud_llm_model_config
+from app.crud.crud_interaction_log import create_interaction_log_async
+
+# Modelos y Schemas (Las "plantillas" de nuestros datos)
+from app.models.api_client import ApiClient as ApiClientModel
+from app.models.context_definition import ContextDefinition, ContextMainType
+from app.models.virtual_agent_profile import VirtualAgentProfile
+from app.schemas.schemas import ChatRequest, ChatResponse
+
+# Lógica específica de la aplicación
+from ._chat_history_logic import FullyCustomChatMessageHistory
+from app.tools.sql_tools import run_db_query_chain
+
+router = APIRouter(tags=["Chat"])
+
+# --- Constantes y Clases de Excepción ---
+CONV_STATE_AWAITING_NAME = "awaiting_name_confirmation"
+CONV_STATE_AWAITING_TOOL_PARAMS = "awaiting_tool_parameters"
+
+class AuthRequiredError(Exception):
+    """Excepción especial para indicar que se requiere login."""
+    def __init__(self, payload: Dict[str, Any]):
+        self.payload = payload
+        super().__init__("Authentication is required for this action.")
+
+async def _handle_human_handoff(uid: str, q: str) -> Dict[str, str]:
+    """Genera un ticket de soporte de fallback."""
+    ticket_id = f"TICKET-{int(time.time())}"
+    return {"ticket_id": ticket_id, "response_text": f"He creado un ticket de soporte ({ticket_id})."}
+
+# --- Funciones de Gestión de Estado ASÍNCRONAS ---
+
+def _get_conversation_state_key(session_id: str) -> str:
+    """Devuelve la clave estandarizada para el NOMBRE del estado de la conversación."""
+    return f"conv:state:{session_id}"
+
+def _get_tool_params_key(session_id: str) -> str:
+    """Devuelve la clave estandarizada para los PARÁMETROS PARCIALES de la herramienta."""
+    return f"conv:params:{session_id}"
+
+async def get_conversation_state_async(redis_client: Optional[AsyncRedis], session_id: str) -> Dict[str, Any]:
+    """Recupera el estado completo de la conversación de forma asíncrona."""
+    if not redis_client:
+        return {"state_name": None, "partial_parameters": {}}
+        
+    state_key = _get_conversation_state_key(session_id)
+    params_key = _get_tool_params_key(session_id)
+    
+    state, params = await asyncio.gather(
+        cache_service.get_generic_cache_async(redis_client, state_key),
+        cache_service.get_generic_cache_async(redis_client, params_key)
+    )
+    
+    return {
+        "state_name": state if isinstance(state, str) else None,
+        "partial_parameters": params if isinstance(params, dict) else {}
+    }
+
+async def save_conversation_state_async(
+    redis_client: Optional[AsyncRedis], 
+    session_id: str, 
+    state_name: Optional[str], 
+    partial_params: Optional[Dict[str, Any]], 
+    ttl_seconds: int = 300
+):
+    """(ASÍNCRONO) Guarda o limpia el estado de la conversación en Redis."""
+    if not redis_client: return
+        
+    state_key = _get_conversation_state_key(session_id)
+    params_key = _get_tool_params_key(session_id)
+
+    if state_name is None:
+        await asyncio.gather(
+            cache_service.delete_generic_cache_async(redis_client, state_key),
+            cache_service.delete_generic_cache_async(redis_client, params_key)
+        )
+    else:
+        tasks = [cache_service.set_generic_cache_async(redis_client, state_key, state_name, ttl_seconds=ttl_seconds)]
+        if partial_params:
+            tasks.append(cache_service.set_generic_cache_async(redis_client, params_key, partial_params, ttl_seconds=ttl_seconds))
+        await asyncio.gather(*tasks)
+
+# --- GRUPO 4: AGENTES Y HANDLERS DE LÓGICA ---
+
+async def master_router_agent(
+    question: str,
+    has_db_capability: bool,
+    has_doc_capability: bool,
+    llm: BaseChatModel
+) -> str:
+    """Decide qué herramienta usar (RAG vs BD). Tu lógica original se mantiene."""
+    if not has_db_capability and not has_doc_capability: return "NO_CAPABILITY"
+    if has_db_capability and not has_doc_capability: return "DATABASE_TOOL"
+    if has_doc_capability and not has_db_capability: return "DOCUMENT_RETRIEVER"
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "Eres un agente enrutador experto. Tu única tarea es seleccionar la herramienta más adecuada para responder la pregunta del usuario. "
+         "Responde únicamente con el nombre de la herramienta elegida en formato JSON.\n\n"
+         "Herramientas Disponibles:\n"
+         "1. `DOCUMENT_RETRIEVER`: Úsala para preguntas generales, conceptuales, o teóricas. "
+         "Ejemplos: '¿qué son las ecuaciones lineales?', 'explícame los logaritmos'.\n\n"
+         "2. `DATABASE_TOOL`: Úsala para preguntas que piden datos específicos y personales del usuario. "
+         "Ejemplos: 'quiero saber mis notas', '¿cuál es mi promedio?', 'dame mi horario'."),
+        ("human", "Pregunta del usuario: {question}\n\nRespuesta JSON (solo la clave 'tool_to_use'):"),
+    ])
+    
+    chain = prompt | llm | JsonOutputParser()
+    
+    try:
+        response = await chain.ainvoke({"question": question})
+        selected_tool = response.get("tool_to_use")
+        if selected_tool in ["DOCUMENT_RETRIEVER", "DATABASE_TOOL"]:
+            print(f"MASTER_ROUTER: Herramienta seleccionada: {selected_tool}")
+            return selected_tool
+    except Exception as e:
+        print(f"MASTER_ROUTER: Error al seleccionar herramienta: {e}. Usando fallback.")
+
+    return "DOCUMENT_RETRIEVER"
+
+async def handle_greeting(vap: VirtualAgentProfile, llm: BaseChatModel, req: ChatRequest) -> Dict[str, Any]:
+    """Maneja el saludo inicial. Tu lógica original se mantiene."""
+    log = {"intent": "GREETING"}
+    chain = ChatPromptTemplate.from_template(vap.greeting_prompt) | llm | StrOutputParser()
+    final_bot_response = await chain.ainvoke({"user_name": req.user_name or "Usuario"})
+    
+    next_state, next_params = None, None
+    if vap.name_confirmation_prompt:
+        next_state = CONV_STATE_AWAITING_NAME
+        next_params = {}
+        
+    return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": next_state, "next_params": next_params}
+
+async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm: BaseChatModel) -> Dict[str, Any]:
+    """Maneja la confirmación del nombre. Tu lógica original se mantiene."""
+    log = {"intent": "NAME_CONFIRMATION"}
+    chain = ChatPromptTemplate.from_template(vap.name_confirmation_prompt) | llm | StrOutputParser()
+    final_bot_response = await chain.ainvoke({"user_provided_name": question.strip()})
+    
+    return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": None, "next_params": None}
+
+async def handle_tool_clarification(
+    req: ChatRequest, conversation_state: Dict, llm: BaseChatModel, history_list: List, 
+    active_contexts: List[ContextDefinition]
+) -> Dict[str, Any]:
+    """Maneja la clarificación de una herramienta. Tu lógica original se mantiene."""
+    ctx_id_from_state = conversation_state["partial_parameters"].get("context_id")
+    target_context = next((c for c in active_contexts if c.id == ctx_id_from_state), None)
+    if not target_context: raise ValueError(f"Error crítico: No se pudo recargar el contexto {ctx_id_from_state} desde el estado.")
+        
+    tool_call_result = await run_db_query_chain(
+        question=req.message, chat_history_str=get_buffer_string(history_list),
+        db_conn_config=target_context.db_connection_config,
+        processing_config=target_context.processing_config or {},
+        llm=llm, user_dni=req.user_dni, 
+        partial_params_from_redis=conversation_state["partial_parameters"]
+    )
+    
+    final_bot_response = tool_call_result.get("final_answer")
+    metadata = tool_call_result.get("metadata", {})
+    log = {"intent": tool_call_result.get("intent")}
+
+    next_state, next_params = None, None
+    if tool_call_result.get("intent") == "CLARIFICATION_REQUIRED":
+        next_state = CONV_STATE_AWAITING_TOOL_PARAMS
+        next_params = {**metadata.get("partial_parameters", {}), "context_id": target_context.id}
+    
+    return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": next_state, "next_params": next_params}
+
+# En app/api/endpoints/chat_api_endpoints.py
+
+async def handle_new_question(
+    # --- Firma de la función Corregida y Limpia ---
+    req: ChatRequest, 
+    llm: BaseChatModel, 
+    history_list: List,
+    active_contexts: List[ContextDefinition], 
+    all_allowed_contexts: List[ContextDefinition],
+    vap: VirtualAgentProfile, 
+    db: AsyncSession,
+    vector_store: PGVector,
+    app_state: AppState,                 # <-- Añadido para consistencia futura
+    redis_client: Optional[AsyncRedis]   # <-- Añadido para consistencia futura
+    # El parámetro 'client_settings' ha sido eliminado porque no se usaba aquí.
+) -> Dict[str, Any]:
+    """
+    Maneja una nueva pregunta del usuario.
+    1. Decide si usar la base de datos (SQL) o los documentos (RAG).
+    2. Ejecuta la cadena de lógica correspondiente.
+    3. Devuelve la respuesta, metadatos y logs.
+    """
+    # --- 1. Identificar Capacidades del Agente ---
+    potential_db_contexts = [c for c in all_allowed_contexts if c.main_type == ContextMainType.DATABASE_QUERY]
+    potential_doc_contexts = [c for c in all_allowed_contexts if c.main_type == ContextMainType.DOCUMENTAL]
+    active_db_ctx = next((c for c in active_contexts if c.main_type == ContextMainType.DATABASE_QUERY), None)
+    active_doc_ctx = next((c for c in active_contexts if c.main_type == ContextMainType.DOCUMENTAL), None)
+    
+    # --- 2. Enrutar la Intención del Usuario ---
+    selected_tool = await master_router_agent(
+        req.message,
+        has_db_capability=bool(potential_db_contexts),
+        has_doc_capability=bool(potential_doc_contexts),
+        llm=llm
+    )
+    
+    # --- 3. Ejecutar la Herramienta Seleccionada ---
+
+    # --- CASO A: Herramienta de Base de Datos ---
+    if selected_tool == "DATABASE_TOOL":
+        if not active_db_ctx:
+            raise AuthRequiredError({ "intent": "AUTH_REQUIRED", "bot_response": "Para esta consulta, necesito que inicies sesión.", "metadata_details_json": {"action_required": "request_login"} })
+        
+        tool_call_result = await run_db_query_chain(
+            question=req.message, chat_history_str=get_buffer_string(history_list),
+            db_conn_config=active_db_ctx.db_connection_config, 
+            processing_config=active_db_ctx.processing_config or {},
+            llm=llm, user_dni=req.user_dni)
+        
+        final_bot_response = tool_call_result.get("final_answer")
+        metadata = tool_call_result.get("metadata", {})
+        log = {"intent": tool_call_result.get("intent")}
+        next_state, next_params = (CONV_STATE_AWAITING_TOOL_PARAMS, {**metadata.get("partial_parameters", {}), "context_id": active_db_ctx.id}) if tool_call_result.get("intent") == "CLARIFICATION_REQUIRED" else (None, None)
+        
+        return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": next_state, "next_params": next_params}
+
+    # --- CASO B: Herramienta de Búsqueda en Documentos (RAG) ---
+    elif selected_tool == "DOCUMENT_RETRIEVER" and active_doc_ctx:
+        # Lógica de limpieza de historial para no contaminar la condensación de la pregunta
+        clean_history_list = []
+        for msg in history_list:
+            if isinstance(msg, AIMessage):
+                if "nota final del curso es" in msg.content or "son las siguientes:" in msg.content:
+                    continue # Omitimos mensajes que son respuestas de la herramienta de notas
+            clean_history_list.append(msg)
+
+        # Definición de la cadena RAG
+        condense_q_prompt = PromptTemplate.from_template(settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE)
+        answer_prompt = ChatPromptTemplate.from_template(vap.system_prompt)
+        retriever = vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"context_name": active_doc_ctx.name}})
+
+        def format_docs(docs: List[LangchainCoreDocument]):
+            return "\n\n".join(d.page_content for d in docs)
+
+        # La condensación SÍ usa el historial limpio
+        standalone_question_chain = RunnablePassthrough.assign(chat_history=lambda x: get_buffer_string(clean_history_list)) | condense_q_prompt | llm | StrOutputParser()
+        
+        retrieved_documents_chain = RunnablePassthrough.assign(standalone_question=standalone_question_chain).assign(context_docs=itemgetter("standalone_question") | retriever)
+        
+        final_rag_chain = (
+            retrieved_documents_chain |
+            RunnablePassthrough.assign(
+                question=itemgetter("standalone_question"),
+                chat_history=lambda x: get_buffer_string(history_list), # El prompt final recibe el historial completo por si necesita contexto general
+                context=itemgetter("context_docs") | RunnableLambda(format_docs),
+            ) |
+            answer_prompt | llm | StrOutputParser()
+        )
+
+        # Ejecución de la cadena
+        chain_input = {"question": req.message}
+        final_bot_response = await final_rag_chain.ainvoke(chain_input)
+        
+        # Extracción de metadatos (fuentes)
+        retrieved_data = await retrieved_documents_chain.ainvoke(chain_input)
+        source_documents = retrieved_data.get("context_docs", [])
+        
+        metadata = {"source_documents": [{"source": doc.metadata.get("source", "N/A"), "page": doc.metadata.get("page")} for doc in source_documents]}
+        log = {"intent": "RAG_DOCUMENTAL"}
+        
+        return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": None, "next_params": None}
+    
+    # --- CASO C: Fallback (No hay herramienta disponible) ---
+    else:
+        return {"response": "Lo siento, no tengo las herramientas o documentos necesarios para tu consulta.", "metadata": {}, "log": {"intent": "NO_CAPABILITY"}, "next_state": None, "next_params": None}
+# Función route_request VERIFICADA
+
+async def route_request(
+    req: ChatRequest, conversation_state: Dict, llm: BaseChatModel, history_list: List,
+    active_contexts: List[ContextDefinition], all_allowed_contexts: List[ContextDefinition],
+    vap: VirtualAgentProfile, client_settings: Dict[str, Any], 
+    db: AsyncSession, redis_client: Optional[AsyncRedis], vector_store: PGVector, app_state: AppState
+) -> Dict[str, Any]:
+    """Orquesta la llamada al handler correcto, pasando TODAS las dependencias."""
+    current_state = conversation_state["state_name"]
+    
+    # Estos handlers simples no necesitan todas las dependencias
+    if not history_list and req.message == "__INICIAR_CHAT__":
+        return await handle_greeting(vap, llm, req)
+    
+    if current_state == CONV_STATE_AWAITING_NAME:
+        return await handle_name_confirmation(req.message, vap, llm)
+    
+    if current_state == CONV_STATE_AWAITING_TOOL_PARAMS:
+        return await handle_tool_clarification(req, conversation_state, llm, history_list, active_contexts)
+    
+    # La llamada a handle_new_question AHORA INCLUYE TODO.
+    return await handle_new_question(
+    req=req, llm=llm, history_list=history_list, active_contexts=active_contexts,
+    all_allowed_contexts=all_allowed_contexts, vap=vap,
+    db=db, vector_store=vector_store, app_state=app_state, redis_client=redis_client
+)
+# ==========================================================
+# ======>   EL ENDPOINT FINAL (UNIFICADO Y ROBUSTO)      <======
+# ==========================================================
+
+@router.post("/api/v1/chat/", response_model=ChatResponse)
+async def process_chat_message(
+    req: ChatRequest,
+    # --- Inyección de Dependencias Completa ---
+    client: ApiClientModel = Depends(get_validated_api_client),
+    db: AsyncSession = Depends(get_crud_db),
+    app_state: AppState = Depends(get_app_state),
+    redis_client: Optional[AsyncRedis] = Depends(get_redis_client),
+    vector_store: PGVector = Depends(get_vector_store)
+):
+    start_time, question, s_id = time.time(), req.message, req.session_id
+    log: Dict[str, Any] = {"user_dni": req.user_dni or s_id, "api_client_name": client.name, "user_message": question}
+    history = FullyCustomChatMessageHistory(s_id, redis_client=redis_client)
+    final_bot_response, metadata_response = "Lo siento, ha ocurrido un error.", {}
+
+    try:
+        # --- 1. CARGA DE DEPENDENCIAS ---
+        api_client_settings = client.settings or {}
+        allowed_ctx_ids = api_client_settings.get("allowed_context_ids", [])
+        if not allowed_ctx_ids: raise HTTPException(403, "API Key sin contextos.")
+
+        stmt_base = select(ContextDefinition).where(ContextDefinition.id.in_(allowed_ctx_ids), ContextDefinition.is_active == True)
+        all_allowed_contexts_stmt = stmt_base.options(selectinload(ContextDefinition.db_connection_config))
+        all_allowed_contexts = (await db.execute(all_allowed_contexts_stmt)).scalars().unique().all()
+
+        if req.is_authenticated_user:
+            active_contexts = all_allowed_contexts
+        else:
+            active_contexts = [c for c in all_allowed_contexts if c.is_public]
+
+        if not active_contexts: raise HTTPException(404, "No hay contextos válidos para esta solicitud.")
+
+        
+
+        
+            
+        vap_id = api_client_settings.get("default_virtual_agent_profile_id_override") or active_contexts[0].virtual_agent_profile_id
+        vap = await crud_virtual_agent_profile.get_fully_loaded_profile(db, vap_id)
+        llm_cfg_id = (api_client_settings.get("default_llm_model_config_id_override") or vap.llm_model_config_id or active_contexts[0].default_llm_model_config_id)
+        llm_config = await crud_llm_model_config.get_llm_model_config_by_id(db, llm_cfg_id)
+        if not llm_config: raise HTTPException(404, "Configuración LLM no encontrada.")
+        
+        # === ¡AQUÍ ESTÁ LA NUEVA LÓGICA DE DECISIÓN! ===
+        final_temperature = 0.7 # Valor de fallback por si todo falla
+
+        # 1. Empezamos con la temperatura por defecto del MODELO
+        if llm_config.default_temperature is not None:
+            final_temperature = llm_config.default_temperature
+            print(f"TEMPERATURE_LOGIC: Usando temp. del modelo: {final_temperature}")
+
+        # 2. Si el AGENTE tiene un override, ESTE GANA.
+        #    (Asegúrate de que tu tabla `virtual_agent_profiles` tenga la columna `temperature_override`)
+        if hasattr(vap, 'temperature_override') and vap.temperature_override is not None:
+            final_temperature = vap.temperature_override
+            print(f"TEMPERATURE_LOGIC: ¡OVERRIDE! Usando temp. del agente: {final_temperature}")
+
+        # 3. Llamamos a get_cached_llm con la temperatura final decidida.
+        llm = await app_state.get_cached_llm(
+            model_config=llm_config,
+            temperature_to_use=final_temperature
+        )
+        # Corrección 1: Llamada al método de caché de LLM en AppState        
+        # Corrección 4: Llamada al método async de historial
+        history_list = await history.get_messages_async()
+        log["llm_model_used"] = llm_config.display_name
+
+        # --- 2. RECUPERAR ESTADO Y DELEGAR AL ENRUTADOR ---
+        conversation_state = await get_conversation_state_async(redis_client, s_id)
+
+        handler_result = await route_request(
+            req=req, conversation_state=conversation_state, llm=llm, history_list=history_list,
+            active_contexts=active_contexts, all_allowed_contexts=all_allowed_contexts,
+            vap=vap, client_settings=api_client_settings, db=db,
+            redis_client=redis_client, 
+            vector_store=vector_store, app_state=app_state
+
+        )
+        
+        # --- 3. PROCESAR RESULTADO Y GESTIONAR ESTADO ---
+        final_bot_response = handler_result.get("response")
+        metadata_response = handler_result.get("metadata", {})
+        log.update(handler_result.get("log", {}))
+        
+        # Corrección 2: Llamada a la función de guardado con todos sus parámetros
+        await save_conversation_state_async(
+            redis_client, s_id, handler_result.get("next_state"), handler_result.get("next_params")
+        )
+
+    except AuthRequiredError as auth_exc:
+        log.update(auth_exc.payload)
+        final_bot_response = log.get("bot_response")
+        metadata_response = log.get("metadata_details_json", {})
+    
+    except Exception as e:
+        traceback.print_exc()
+        handoff = await _handle_human_handoff(req.user_dni or s_id, question)
+        log.update({"error_message": f"Error: {e.__class__.__name__} - {e}", "bot_response": handoff.get("response_text", "Error al procesar.")})
+        final_bot_response = log["bot_response"]
+        metadata_response = {"error_type": e.__class__.__name__, "handoff_ticket": handoff.get("ticket_id")}
+        # Intentamos limpiar el estado de redis
+        await save_conversation_state_async(redis_client, s_id, None, None)
+        
+    finally:
+        log.update({"bot_response": final_bot_response, "response_time_ms": int((time.time() - start_time) * 1000)})
+        
+        if not isinstance(metadata_response, dict): metadata_response = {}
+        if "intent" not in metadata_response and log.get("intent"): metadata_response["intent"] = log.get("intent")
+            
+        try:
+            log_to_save = log.copy()
+            log_to_save["metadata_details_json"] = json.dumps(metadata_response, default=str)
+            
+            # Corrección 3: Llamada a la función de CRUD asíncrona
+            await create_interaction_log_async(db, log_to_save)
+            
+            if "error_message" not in log:
+                # Corrección 4: Llamada al método async de historial
+                await history.add_messages_async([HumanMessage(content=question), AIMessage(content=final_bot_response)])
+
+        except Exception as final_e:
+            print(f"CRITICAL: Fallo al guardar log/historial en 'finally': {final_e}")
+            traceback.print_exc()
+
+    return ChatResponse(
+        session_id=s_id,
+        original_message=question,
+        bot_response=final_bot_response.strip() if final_bot_response else "No se pudo generar una respuesta.",
+        metadata_details_json=metadata_response
+    )
