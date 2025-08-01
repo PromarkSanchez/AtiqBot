@@ -194,6 +194,10 @@ class VirtualAgentProfileBase(BaseModel):
     temperature_override: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens_override: Optional[int] = Field(None, ge=1)
     is_active: bool = Field(True)
+    # === AÑADE ESTAS DOS LÍNEAS AQUÍ ===
+    default_user_role: Optional[str] = Field("Usuario", max_length=100)
+    fallback_prompt: Optional[str] = None
+    # ==================================
 
 class VirtualAgentProfileCreate(VirtualAgentProfileBase):
     # La herencia es suficiente, pero por claridad, podríamos definir los campos aquí
@@ -222,6 +226,10 @@ class VirtualAgentProfileUpdate(BaseModel):
     temperature_override: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens_override: Optional[int] = Field(None, ge=1)
     is_active: Optional[bool] = None
+    # === AÑADE ESTAS DOS LÍNEAS AQUÍ ===
+    default_user_role: Optional[str] = Field(None, max_length=100)
+    fallback_prompt: Optional[str] = None
+    # ==================================
 
 class VirtualAgentProfileResponse(VirtualAgentProfileBase, OrmBaseModel):
     id: int

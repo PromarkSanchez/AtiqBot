@@ -6,7 +6,12 @@ from typing import Dict, Optional
 
 # --- Librerías de Terceros ---
 # Usamos el módulo asyncio de la librería redis oficial
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis # Mantenemos esta
 from redis.asyncio import Redis as AsyncRedis
+
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -137,15 +142,25 @@ class AppState:
         print("      -> Éxito: Pools SÍNCRONOS creados.")
 
         # 5. Conexión a Redis
-        print("      [5/5] Conectando a Redis Cache (asíncrono)...")
+        print("      [5/5] Inicializando Backend de Caché con Redis...")
         if settings.REDIS_URL:
             try:
-                self.redis_client = AsyncRedis.from_url(settings.REDIS_URL, decode_responses=True)
-                await self.redis_client.ping()
-                print("      -> Éxito: Conexión a Redis establecida.")
+                # Creamos una instancia de cliente de bajo nivel.
+                redis_instance = aioredis.from_url(settings.REDIS_URL, encoding="utf8", decode_responses=True)
+                # Pasamos esta instancia a la librería de caché.
+                FastAPICache.init(RedisBackend(redis_instance), prefix="fastapi-cache")
+                self.redis_client = redis_instance
+                # La librería se encargará del ping y la gestión de la conexión.
+                print("      -> Éxito: Backend de caché Redis configurado.")
             except Exception as e:
                 self.redis_client = None
-                print(f"      -> ADVERTENCIA: Falló conexión a Redis. Error: {e}")
+                FastAPICache.init(InMemoryBackend()) # Un fallback a memoria
+                print(f"      -> ADVERTENCIA: Falló la conexión a Redis. Usando caché en memoria. Error: {e}")
+        else:
+            # Fallback a un backend de memoria si no hay URL de Redis
+            from fastapi_cache.backends.in_memory import InMemoryBackend
+            FastAPICache.init(InMemoryBackend())
+            print("      -> ADVERTENCIA: REDIS_URL no configurada. Usando caché en memoria.")
         
         print("--- [INIT] Todos los recursos inicializados con éxito. ---\n")
 

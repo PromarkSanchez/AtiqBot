@@ -28,14 +28,17 @@ class Settings(BaseSettings):
         "http://3.227.128.241:5173", "http://172.31.35.254:5173",
         "https://upch-test.blackboard.com", "https://admin-ia.cayetano.pe",
         "https://admin-ia-back.cayetano.pe", "https://cayetano.pe",
-        "http://172.17.100.75"
+        "http://172.17.100.75",
+        "http://127.0.0.1:5500"
     ]
 
     # ==========================================================
     # ======>        NUEVA CONFIGURACIÓN DE REDIS        <======
     # ==========================================================
     # URL de conexión a Redis. Se puede sobreescribir con una variable de entorno.
-    REDIS_URL: str = "redis://localhost:6379"
+    # REDIS_URL: str = "redis://localhost:6379"
+    REDIS_URL : str ="redis://172.31.17.92:6379"
+
     # Tiempo de expiración para las entradas del caché en segundos (1 hora por defecto).
     CACHE_EXPIRATION_SECONDS: int = 3600
     # ==========================================================
@@ -77,19 +80,22 @@ class Settings(BaseSettings):
     CHAT_HISTORY_WINDOW_SIZE_SQL: int = 0
 
     # --- PROMPTS POR DEFECTO / FALLBACK ---
+
+
+# Dentro de la clase Settings en app/config.py
+
     DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE: str = (
-    "Dada la siguiente conversación y una pregunta de seguimiento, reformula la pregunta de seguimiento para que sea una pregunta independiente y autocontenida sobre el TEMA PRINCIPAL de la última pregunta del usuario.\n"
-    "REGLAS IMPORTANTES:\n"
-    "1. ENFÓCATE EXCLUSIVAMENTE en la intención de la 'Pregunta de Seguimiento'.\n"
-    "2. IGNORA por completo cualquier parte del historial que hable de datos personales, consultas a bases de datos, notas, promedios o información específica del usuario. El objetivo es una pregunta CONCEPTUAL y GENERAL.\n"
-    "3. NO mezcles el tema de la pregunta de seguimiento con temas anteriores.\n"
-    "4. Si la pregunta de seguimiento ya es autocontenida (ej. '¿Qué es un logaritmo?'), devuélvela SIN CAMBIOS.\n\n"
-    "Historial del Chat:\n"
-    "{chat_history}\n\n"
-    "Pregunta de Seguimiento: {question}\n\n"
-    "Pregunta Independiente:"
-)
-    
+        "Tu tarea es reformular la Pregunta de Seguimiento para que sea una pregunta completa y autocontenida. Debes IGNORAR COMPLETAMENTE el Historial de Chat y concentrarte ÚNICA Y EXCLUSIVAMENTE en la última pregunta del usuario.\n"
+        "El historial es solo para contexto mínimo, no para mezclar temas.\n\n"
+        "REGLA DE ORO: Si la 'Pregunta de Seguimiento' introduce un TEMA NUEVO (como cambiar de 'logaritmos' a 'ecuaciones'), tu respuesta DEBE SER solo sobre ese TEMA NUEVO.\n\n"
+        "Historial del Chat (ignorar para reformular):\n"
+        "{chat_history}\n\n"
+        "Pregunta de Seguimiento (CONCÉNTRATE AQUÍ):\n"
+        "{question}\n\n"
+        "Pregunta Independiente Resultante:"
+    )
+
+
     DEFAULT_RAG_DOCS_QA_TEMPLATE: str = (
         "Eres un Asistente Virtual. Usa el siguiente contexto para responder a la pregunta. "
         "Si no sabes la respuesta basándote en el contexto, simplemente di que no tienes esa información, "
@@ -103,7 +109,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore')
 
     # Constructor
-   
+
 
 
 settings = Settings()

@@ -178,37 +178,52 @@ async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm:
     return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": None, "next_params": None}
 
 async def handle_tool_clarification(
-    req: ChatRequest, conversation_state: Dict, llm: BaseChatModel, history_list: List, 
+    req: ChatRequest, 
+    conversation_state: Dict, 
+    llm: BaseChatModel, 
+    history_list: List, 
     active_contexts: List[ContextDefinition]
 ) -> Dict[str, Any]:
-    """Maneja la clarificación de una herramienta. Tu lógica original se mantiene."""
+    """
+    Maneja un turno de una conversación de clarificación ya iniciada.
+    """
+    # Recupera el contexto de la base de datos que estamos usando, guardado en el estado
     ctx_id_from_state = conversation_state["partial_parameters"].get("context_id")
     target_context = next((c for c in active_contexts if c.id == ctx_id_from_state), None)
-    if not target_context: raise ValueError(f"Error crítico: No se pudo recargar el contexto {ctx_id_from_state} desde el estado.")
-        
+    if not target_context:
+        raise ValueError(f"Error crítico: No se pudo recargar el contexto {ctx_id_from_state} desde el estado.")
+    
+    # Llama a la cadena SQL y le pasa los parámetros parciales que teníamos guardados en Redis
     tool_call_result = await run_db_query_chain(
-        question=req.message, chat_history_str=get_buffer_string(history_list),
+        question=req.message,
+        chat_history_str=get_buffer_string(history_list),
         db_conn_config=target_context.db_connection_config,
         processing_config=target_context.processing_config or {},
-        llm=llm, user_dni=req.user_dni, 
-        partial_params_from_redis=conversation_state["partial_parameters"]
+        llm=llm,
+        user_dni=req.user_dni, 
+        partial_params_from_redis=conversation_state.get("partial_parameters")
     )
     
     final_bot_response = tool_call_result.get("final_answer")
     metadata = tool_call_result.get("metadata", {})
     log = {"intent": tool_call_result.get("intent")}
 
+    # Si la herramienta AÚN necesita más información, mantenemos el estado
+    # y actualizamos los parámetros parciales con la nueva información que encontramos.
     next_state, next_params = None, None
     if tool_call_result.get("intent") == "CLARIFICATION_REQUIRED":
         next_state = CONV_STATE_AWAITING_TOOL_PARAMS
-        next_params = {**metadata.get("partial_parameters", {}), "context_id": target_context.id}
+        next_params = tool_call_result["metadata"].get("partial_parameters", {})
+        next_params["context_id"] = target_context.id # Mantenemos el ID del contexto
     
     return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": next_state, "next_params": next_params}
+# En app/api/endpoints/chat_api_endpoints.py
 
 # En app/api/endpoints/chat_api_endpoints.py
 
+# UBICACIÓN: app/api/endpoints/chat_api_endpoints.py
+
 async def handle_new_question(
-    # --- Firma de la función Corregida y Limpia ---
     req: ChatRequest, 
     llm: BaseChatModel, 
     history_list: List,
@@ -217,61 +232,78 @@ async def handle_new_question(
     vap: VirtualAgentProfile, 
     db: AsyncSession,
     vector_store: PGVector,
-    app_state: AppState,                 # <-- Añadido para consistencia futura
-    redis_client: Optional[AsyncRedis]   # <-- Añadido para consistencia futura
-    # El parámetro 'client_settings' ha sido eliminado porque no se usaba aquí.
+    app_state: AppState,
+    redis_client: Optional[AsyncRedis]
 ) -> Dict[str, Any]:
     """
-    Maneja una nueva pregunta del usuario.
-    1. Decide si usar la base de datos (SQL) o los documentos (RAG).
-    2. Ejecuta la cadena de lógica correspondiente.
-    3. Devuelve la respuesta, metadatos y logs.
+    Maneja una nueva pregunta con una capa de seguridad explícita y flujo de datos corregido.
     """
-    # --- 1. Identificar Capacidades del Agente ---
-    potential_db_contexts = [c for c in all_allowed_contexts if c.main_type == ContextMainType.DATABASE_QUERY]
-    potential_doc_contexts = [c for c in all_allowed_contexts if c.main_type == ContextMainType.DOCUMENTAL]
+    # --- 1. Determinar contextos y capacidades ---
     active_db_ctx = next((c for c in active_contexts if c.main_type == ContextMainType.DATABASE_QUERY), None)
     active_doc_ctx = next((c for c in active_contexts if c.main_type == ContextMainType.DOCUMENTAL), None)
     
-    # --- 2. Enrutar la Intención del Usuario ---
+    has_db_capability = any(c.main_type == ContextMainType.DATABASE_QUERY for c in all_allowed_contexts)
+    has_doc_capability = any(c.main_type == ContextMainType.DOCUMENTAL for c in all_allowed_contexts)
+    
+    # --- 2. Enrutar Intención ---
     selected_tool = await master_router_agent(
         req.message,
-        has_db_capability=bool(potential_db_contexts),
-        has_doc_capability=bool(potential_doc_contexts),
+        has_db_capability=has_db_capability,
+        has_doc_capability=has_doc_capability,
         llm=llm
     )
     
-    # --- 3. Ejecutar la Herramienta Seleccionada ---
-
-    # --- CASO A: Herramienta de Base de Datos ---
+    # --- 3. Control de Acceso y Ejecución ---
+    
+    # --- CASO A: Intención es usar Base de Datos ---
     if selected_tool == "DATABASE_TOOL":
-        if not active_db_ctx:
-            raise AuthRequiredError({ "intent": "AUTH_REQUIRED", "bot_response": "Para esta consulta, necesito que inicies sesión.", "metadata_details_json": {"action_required": "request_login"} })
         
+        # Primero, la muralla de seguridad
+        if not active_db_ctx:
+            print("SECURITY_GATE: Denegado. Se requiere autenticación para DATABASE_TOOL.")
+            raise AuthRequiredError({
+                "intent": "AUTH_REQUIRED", 
+                "bot_response": "Para esta consulta, necesito que inicies sesión.", 
+                "metadata_details_json": {"action_required": "request_login"}
+            })
+        
+        # Si el acceso está permitido, ejecutar la herramienta para un TURNO NUEVO.
+        print("SECURITY_GATE: Permitido. Ejecutando DATABASE_TOOL (primer turno).")
         tool_call_result = await run_db_query_chain(
-            question=req.message, chat_history_str=get_buffer_string(history_list),
+            question=req.message, 
+            chat_history_str=get_buffer_string(history_list),
             db_conn_config=active_db_ctx.db_connection_config, 
             processing_config=active_db_ctx.processing_config or {},
-            llm=llm, user_dni=req.user_dni)
+            llm=llm, 
+            user_dni=req.user_dni,
+            partial_params_from_redis=None  # <-- Clave: Es una pregunta nueva, no hay estado previo.
+        )
         
         final_bot_response = tool_call_result.get("final_answer")
         metadata = tool_call_result.get("metadata", {})
         log = {"intent": tool_call_result.get("intent")}
-        next_state, next_params = (CONV_STATE_AWAITING_TOOL_PARAMS, {**metadata.get("partial_parameters", {}), "context_id": active_db_ctx.id}) if tool_call_result.get("intent") == "CLARIFICATION_REQUIRED" else (None, None)
+        
+        # Si la herramienta necesita más datos, establecemos el estado para el siguiente turno.
+        next_state, next_params = None, None
+        if tool_call_result.get("intent") == "CLARIFICATION_REQUIRED":
+            next_state = CONV_STATE_AWAITING_TOOL_PARAMS
+            next_params = metadata.get("partial_parameters", {})
+            next_params["context_id"] = active_db_ctx.id
         
         return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": next_state, "next_params": next_params}
 
-    # --- CASO B: Herramienta de Búsqueda en Documentos (RAG) ---
-    elif selected_tool == "DOCUMENT_RETRIEVER" and active_doc_ctx:
-        # Lógica de limpieza de historial para no contaminar la condensación de la pregunta
-        clean_history_list = []
-        for msg in history_list:
-            if isinstance(msg, AIMessage):
-                if "nota final del curso es" in msg.content or "son las siguientes:" in msg.content:
-                    continue # Omitimos mensajes que son respuestas de la herramienta de notas
-            clean_history_list.append(msg)
+    # --- CASO B: Intención es usar Documentos (RAG) ---
+    elif selected_tool == "DOCUMENT_RETRIEVER":
+        
+        # Muralla de seguridad para documentos
+        if not active_doc_ctx:
+            print("SECURITY_GATE: Denegado. No hay un contexto de Documentos activo.")
+            return {"response": "Lo siento, no tengo acceso a los documentos necesarios en este momento.", "metadata": {}, "log": {"intent": "NO_CONTEXT_AVAILABLE"}, "next_state": None, "next_params": None}
 
-        # Definición de la cadena RAG
+        # Ejecución de la cadena RAG (tu lógica original completa)
+        print("SECURITY_GATE: Permitido. Ejecutando DOCUMENT_RETRIEVER (RAG).")
+        clean_history_list = [msg for msg in history_list if not (isinstance(msg, AIMessage) and ("nota final del curso es" in msg.content or "son las siguientes:" in msg.content))]
+
         condense_q_prompt = PromptTemplate.from_template(settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE)
         answer_prompt = ChatPromptTemplate.from_template(vap.system_prompt)
         retriever = vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"context_name": active_doc_ctx.name}})
@@ -279,7 +311,6 @@ async def handle_new_question(
         def format_docs(docs: List[LangchainCoreDocument]):
             return "\n\n".join(d.page_content for d in docs)
 
-        # La condensación SÍ usa el historial limpio
         standalone_question_chain = RunnablePassthrough.assign(chat_history=lambda x: get_buffer_string(clean_history_list)) | condense_q_prompt | llm | StrOutputParser()
         
         retrieved_documents_chain = RunnablePassthrough.assign(standalone_question=standalone_question_chain).assign(context_docs=itemgetter("standalone_question") | retriever)
@@ -287,18 +318,17 @@ async def handle_new_question(
         final_rag_chain = (
             retrieved_documents_chain |
             RunnablePassthrough.assign(
+                user_name=lambda x: req.user_name or vap.default_user_role,
                 question=itemgetter("standalone_question"),
-                chat_history=lambda x: get_buffer_string(history_list), # El prompt final recibe el historial completo por si necesita contexto general
+                chat_history=lambda x: get_buffer_string(history_list),
                 context=itemgetter("context_docs") | RunnableLambda(format_docs),
             ) |
             answer_prompt | llm | StrOutputParser()
         )
 
-        # Ejecución de la cadena
         chain_input = {"question": req.message}
         final_bot_response = await final_rag_chain.ainvoke(chain_input)
         
-        # Extracción de metadatos (fuentes)
         retrieved_data = await retrieved_documents_chain.ainvoke(chain_input)
         source_documents = retrieved_data.get("context_docs", [])
         
@@ -307,36 +337,53 @@ async def handle_new_question(
         
         return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": None, "next_params": None}
     
-    # --- CASO C: Fallback (No hay herramienta disponible) ---
+    # --- CASO C: Fallback ---
     else:
-        return {"response": "Lo siento, no tengo las herramientas o documentos necesarios para tu consulta.", "metadata": {}, "log": {"intent": "NO_CAPABILITY"}, "next_state": None, "next_params": None}
-# Función route_request VERIFICADA
+        return {"response": "Lo siento, no estoy seguro de cómo ayudarte con eso. ¿Puedes intentarlo de otra manera?", "metadata": {}, "log": {"intent": "NO_CAPABILITY"}, "next_state": None, "next_params": None}# Función route_request VERIFICADA
 
 async def route_request(
     req: ChatRequest, conversation_state: Dict, llm: BaseChatModel, history_list: List,
     active_contexts: List[ContextDefinition], all_allowed_contexts: List[ContextDefinition],
-    vap: VirtualAgentProfile, client_settings: Dict[str, Any], 
-    db: AsyncSession, redis_client: Optional[AsyncRedis], vector_store: PGVector, app_state: AppState
+    vap: VirtualAgentProfile, db: AsyncSession, 
+    redis_client: Optional[AsyncRedis], vector_store: PGVector, app_state: AppState
 ) -> Dict[str, Any]:
-    """Orquesta la llamada al handler correcto, pasando TODAS las dependencias."""
+    """
+    Orquesta la llamada al handler correcto con un "guardarraíl" para los saludos,
+    incluso si Redis no está funcionando.
+    """
     current_state = conversation_state["state_name"]
+    question = req.message
     
-    # Estos handlers simples no necesitan todas las dependencias
-    if not history_list and req.message == "__INICIAR_CHAT__":
+    # === REGLA 1: Manejar el saludo inicial absoluto ===
+    if not history_list and question == "__INICIAR_CHAT__":
+        print("ROUTE_LOGIC: Turno 1. Llamando a handle_greeting.")
         return await handle_greeting(vap, llm, req)
     
+    # === REGLA 2 (LA BALA DE PLATA): Guardarraíl sin estado ===
+    # Si la conversación tiene solo 2 mensajes (El inicio y la 1ra respuesta del bot),
+    # el siguiente mensaje del usuario ES la respuesta a "¿Cómo te llamas?".
+    # Esto funciona incluso si Redis está caído y `current_state` es None.
+    if len(history_list) == 2:
+        print("ROUTE_LOGIC: Turno 2 (sin estado) detectado. Llamando a handle_name_confirmation.")
+        return await handle_name_confirmation(question, vap, llm)
+    
+    # === REGLA 3: Manejar estados de conversación activos (si Redis funciona) ===
+    # Esta es nuestra lógica original, que sigue siendo válida y más robusta si Redis está activo.
     if current_state == CONV_STATE_AWAITING_NAME:
-        return await handle_name_confirmation(req.message, vap, llm)
+        print("ROUTE_LOGIC: Estado 'AWAITING_NAME' detectado. Llamando a handle_name_confirmation.")
+        return await handle_name_confirmation(question, vap, llm)
     
     if current_state == CONV_STATE_AWAITING_TOOL_PARAMS:
+        print("ROUTE_LOGIC: Estado 'AWAITING_TOOL_PARAMS' detectado. Llamando a handle_tool_clarification.")
         return await handle_tool_clarification(req, conversation_state, llm, history_list, active_contexts)
     
-    # La llamada a handle_new_question AHORA INCLUYE TODO.
+    # === REGLA 4: Si nada de lo anterior coincide, es una pregunta nueva. AHORA SÍ, enrutamos. ===
+    print("ROUTE_LOGIC: No hay estado de saludo. Enrutando como nueva pregunta.")
     return await handle_new_question(
-    req=req, llm=llm, history_list=history_list, active_contexts=active_contexts,
-    all_allowed_contexts=all_allowed_contexts, vap=vap,
-    db=db, vector_store=vector_store, app_state=app_state, redis_client=redis_client
-)
+        req=req, llm=llm, history_list=history_list, active_contexts=active_contexts,
+        all_allowed_contexts=all_allowed_contexts, vap=vap, db=db, vector_store=vector_store,
+        app_state=app_state, redis_client=redis_client
+    )
 # ==========================================================
 # ======>   EL ENDPOINT FINAL (UNIFICADO Y ROBUSTO)      <======
 # ==========================================================
@@ -413,7 +460,8 @@ async def process_chat_message(
         handler_result = await route_request(
             req=req, conversation_state=conversation_state, llm=llm, history_list=history_list,
             active_contexts=active_contexts, all_allowed_contexts=all_allowed_contexts,
-            vap=vap, client_settings=api_client_settings, db=db,
+            vap=vap, 
+            db=db,
             redis_client=redis_client, 
             vector_store=vector_store, app_state=app_state
 
