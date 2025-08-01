@@ -16,6 +16,7 @@ import AdminChatTestPage from './pages/AdminChatTestPage';
 import AccessDeniedPage from './pages/AccessDeniedPage'; // <-- Nueva página
 import AdminLlmModelsPage from './pages/AdminLlmModelsPage';
 import AdminVirtualAgentsPage from './pages/AdminVirtualAgentsPage';
+import AdminWebchatCustomizerPage from './pages/AdminWebchatCustomizerPage'; 
 
 const ProtectedRoute: React.FC = () => {
     const { isAuthenticated } = useAuth();
@@ -54,6 +55,8 @@ function App() {
           <Route path="test-chat" element={<AdminChatTestPage />} />
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/virtual-agents" element={<AdminVirtualAgentsPage />} />
+          <Route path="webchat-customizer" element={<AdminWebchatCustomizerPage />} />
+
         </Route>
       </Route>
 
