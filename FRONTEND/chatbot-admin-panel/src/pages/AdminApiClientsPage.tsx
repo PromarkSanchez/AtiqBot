@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   // Hooks generados por Orval con los nuevos operation_id
-  useReadAllApiClients,
-  useCreateNewApiClient,
-  useUpdateApiClientById,
-  useDeleteApiClientById,
-  useRegenerateApiKeyForClient,
+  useReadAllApiClientsEndpointApiV1AdminApiClientsGet as useReadAllApiClients,
+  useCreateNewApiClientEndpointApiV1AdminApiClientsPost as useCreateNewApiClient,
+  useUpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut as useUpdateApiClientById,
+  useDeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete as  useDeleteApiClientById,
+  useRegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost  as useRegenerateApiKeyForClient,
 } from '../services/api/endpoints'; 
 
 import type { 
@@ -16,7 +16,6 @@ import type {
   ApiClientUpdate, 
   HTTPValidationError,
   ApiClientSettingsSchema,
-  ContextDefinitionBriefForApiClient, // Este tipo está en ApiClientResponse
   ReadAllApiClientsParams,           // Tipo para los parámetros del hook readAllApiClients
 } from '../services/api/schemas';
 import type { AxiosError } from 'axios';
@@ -25,7 +24,13 @@ import toast, { Toaster } from 'react-hot-toast';
 import Modal from '../components/shared/Modal';
 import ApiClientForm from '../components/admin/api_clients/ApiClientForm'; 
 import { Button, IconButton } from '../components/shared/Button'; 
-import { PencilSquareIcon, TrashIcon, KeyIcon, PlusIcon, PlayCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'; 
+import { PencilSquareIcon, PlusIcon, PlayCircleIcon, InformationCircleIcon, KeyIcon, TrashIcon, PaintBrushIcon } from '@heroicons/react/24/outline'; 
+ 
+// Al principio de src/pages/AdminApiClientsPage.tsx
+import { Link } from 'react-router-dom';
+
+// ...resto de tus imports
+
 
 const getAppIdFromSettings = (settings: ApiClientSettingsSchema | undefined | null): string | undefined => {
   return settings?.application_id; 
@@ -84,6 +89,10 @@ const AdminApiClientsPage: React.FC = () => {
         toast.success(`Cliente API "${responseFromApi.name}" creado.`);
         if (responseFromApi.api_key_plain) { 
           setApiKeyToDisplay(responseFromApi.api_key_plain);
+            localStorage.setItem('test_chat_api_key', responseFromApi.api_key_plain);
+          if(responseFromApi.settings?.application_id) {
+              localStorage.setItem('test_chat_app_id', responseFromApi.settings.application_id);
+          }
         } else {
           toast((t) => (
             <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-yellow-100 dark:bg-yellow-800 shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 p-3`}>
@@ -132,6 +141,10 @@ const AdminApiClientsPage: React.FC = () => {
         if (responseFromApi?.api_key_plain) {
             toast.success(`Nueva API Key generada para "${responseFromApi.name}". Cópiala ahora.`);
             setApiKeyToDisplay(responseFromApi.api_key_plain);
+              localStorage.setItem('test_chat_api_key', responseFromApi.api_key_plain);
+          if(responseFromApi.settings?.application_id) {
+            localStorage.setItem('test_chat_app_id', responseFromApi.settings.application_id);
+          }
         } else {
            toast.error(`No se pudo mostrar la nueva API Key para "${responseFromApi?.name}". Contacta soporte.`, {id: 'regenKeyErrorNotVisible'});
         }
@@ -283,11 +296,33 @@ const AdminApiClientsPage: React.FC = () => {
                         : <span className="italic text-gray-400 dark:text-gray-500 text-xs">-</span>
                       }
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
+                    
+                     <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
                         <div className="flex items-center justify-center space-x-1 md:space-x-2">
-                           <IconButton aria-label="Editar" onClick={() => handleOpenEditModal(client)} icon={<PencilSquareIcon className="h-5 w-5"/>} variant="ghost" className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
-                           <IconButton aria-label="Regenerar API Key" onClick={() => handleRegenerateKey(client)} icon={<KeyIcon className="h-5 w-5"/>} variant="ghost" className="text-yellow-500 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
-                           <IconButton aria-label="Eliminar" onClick={() => handleOpenDeleteModal(client)} icon={<TrashIcon className="h-5 w-5"/>} variant="ghost" className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
+                          
+                          {/* =============== INICIO DE LA MODIFICACIÓN =============== */}
+
+                          {/* BOTÓN 1: PERSONALIZAR UI (¡NUESTRO BOTÓN!) */}
+                          <Link to={`/admin/webchat-customizer/${client.id}`} className="block">
+                            <IconButton 
+                                aria-label="Personalizar Interfaz" 
+                                title="Personalizar Webchat UI" 
+                                icon={<PaintBrushIcon className="h-5 w-5"/>} 
+                                variant="ghost" 
+                                className="text-cyan-600 hover:text-cyan-800 dark:text-cyan-400 dark:hover:text-cyan-300" 
+                            />
+                          </Link>
+
+                          {/* BOTÓN 2: EDITAR CLIENTE (el que ya tenías) */}
+                          <IconButton aria-label="Editar" onClick={() => handleOpenEditModal(client)} icon={<PencilSquareIcon className="h-5 w-5"/>} variant="ghost" className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
+                          
+                          {/* BOTÓN 3: REGENERAR KEY (el que ya tenías) */}
+                          <IconButton aria-label="Regenerar API Key" onClick={() => handleRegenerateKey(client)} icon={<KeyIcon className="h-5 w-5"/>} variant="ghost" className="text-yellow-500 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
+                          
+                          {/* BOTÓN 4: ELIMINAR (el que ya tenías) */}
+                          <IconButton aria-label="Eliminar" onClick={() => handleOpenDeleteModal(client)} icon={<TrashIcon className="h-5 w-5"/>} variant="ghost" className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
+                          
+                          {/* ================ FIN DE LA MODIFICACIÓN ================ */}
                         </div>
                     </td>
                   </tr>

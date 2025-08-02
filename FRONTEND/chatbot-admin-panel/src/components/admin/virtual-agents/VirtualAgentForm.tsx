@@ -118,7 +118,7 @@ const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ agent, onFormSubmit
           setValue('name_confirmation_prompt', promptDict.name_confirmation_prompt || '', { shouldDirty: true });
           setValue('system_prompt', promptDict.system_prompt || '', { shouldDirty: true });
         },
-        onError: (error: any) => { /* Tu manejador de errores original está bien */ }
+        onError: () => { /* Tu manejador de errores original está bien */ }
       }
     );
   };
@@ -140,7 +140,7 @@ const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ agent, onFormSubmit
       dominio_conocimiento: ficha_dominio_conocimiento,
       reglas_adicionales: ficha_reglas_adicionales
     };
-    const goalDescription = `Rol: ${ficha_rol_principal}. Dominio: ${ficha_dominio_conocimiento}`;
+    // Removed unused variable 'goalDescription'
 
     const payload: VirtualAgentProfileCreate = {
         ...restOfData,

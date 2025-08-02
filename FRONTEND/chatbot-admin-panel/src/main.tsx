@@ -9,8 +9,7 @@ import './index.css'; // Tus estilos globales y Tailwind
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // 2. (Opcional pero recomendado) Importa las Devtools de React Query
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-
+ 
 import { BrowserRouter } from 'react-router-dom'; // <-- IMPORTAR BROWSERROUTER
 import { AuthProvider } from './contexts/AuthContext'; // <-- IMPORTAR
 
@@ -35,7 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider> {/* <-- ENVOLVER CON AUTHPROVIDER */}
           <App />
-          <ReactQueryDevtools initialIsOpen={false} />
+        
         </AuthProvider> {/* <-- CERRAR AUTHPROVIDER */}
       </QueryClientProvider>
     </BrowserRouter>

@@ -12,6 +12,8 @@ class ApiClient(Base_CRUD):
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     settings = Column(JSON, nullable=True) # Esto es flexible para nuestra nueva estructura de settings
+    webchat_ui_config = Column(JSON, nullable=True, comment="Configuración visual para el widget de webchat embebible.")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

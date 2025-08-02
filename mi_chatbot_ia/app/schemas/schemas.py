@@ -1,15 +1,25 @@
 # app/schemas/schemas.py
 
 import enum
+from enum import Enum # <-- AÑADE ESTA LÍNEA
+
 import json # Aunque no se usa directamente aquí, es común tenerlo cerca de schemas
 import datetime
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union,Literal
 from app.models.app_user import AuthMethod # Necesitamos importar el Enum
+import re # <-- Asegúrate de tener este import
 
 from pydantic import (
     BaseModel, Field, constr, EmailStr, ConfigDict,
     model_validator, ValidationInfo, field_validator
 )
+
+def to_camel(snake_str: str) -> str:
+    """Convierte un string_de_este_tipo a un stringDeEsteTipo."""
+    components = snake_str.split('_')
+    # Dejamos la primera parte en minúsculas y capitalizamos el resto.
+    return components[0] + ''.join(x.title() for x in components[1:])
+
 print("SCHEMA_PY_DEBUG: Pydantic core components imported.")
 
 # === IMPORTACIÓN DE ENUMS DESDE MODELOS SQLAlchemy ===
@@ -528,6 +538,44 @@ print("SCHEMA_PY_DEBUG: ContextDefinition schemas defined.")
 # =====================================================
 # --- SCHEMAS PARA ApiClientSettings Y API CLIENT ---
 # =====================================================
+
+# --- Componentes del Schema ---
+class WebchatUITheme(BaseModel):
+    primaryColor: str
+    avatarBackgroundColor: str
+
+class WebchatInitialState(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+# ---> ¡NUEVO ENUM PARA EL TEMA! <---
+class WebchatThemeMode(str, Enum):
+    LIGHT = "light"
+    DARK = "dark"
+    SYSTEM = "system"
+
+# --- Schema Principal (Actualizado) ---
+class WebchatUIConfig(BaseModel):
+    botName: str
+    botDescription: Optional[str] = None
+    composerPlaceholder: Optional[str] = None
+    theme: WebchatUITheme
+    showBetaBadge: Optional[bool] = False
+    footerEnabled: Optional[bool] = True
+    footerText: Optional[str] = "Powered by AtiqTec"
+    footerLink: Optional[str] = "https://atiqtec.com"
+    initialState: Optional[WebchatInitialState] = WebchatInitialState.CLOSED
+    initialStateText: Optional[str] = "¡Hola! ¿Podemos ayudarte?"
+    avatarImageUrl: Optional[str] = None
+    floatingButtonImageUrl: Optional[str] = None
+    
+    # ---> ¡NUEVO CAMPO AÑADIDO! <---
+    themeMode: Optional[WebchatThemeMode] = WebchatThemeMode.SYSTEM
+
+    model_config = ConfigDict(alias_generator=to_camel, allow_population_by_field_name=True)
+
+    
+
 class ApiClientSettingsSchema(BaseModel):
     application_id: str = Field(min_length=3, max_length=100)
     allowed_context_ids: List[int] = Field(default_factory=list)
@@ -561,6 +609,8 @@ class ApiClientUpdate(BaseModel):
 class ApiClientResponse(ApiClientBase, OrmBaseModel):
     id: int; created_at: datetime.datetime; updated_at: datetime.datetime
     allowed_contexts_details: List[ContextDefinitionBriefForApiClient] = Field(default_factory=list)
+    webchat_ui_config: Optional[WebchatUIConfig] = None 
+
 
 class ApiClientWithPlainKeyResponse(ApiClientResponse):
     api_key_plain: Optional[str] = None
@@ -606,8 +656,7 @@ print("SCHEMA_PY_DEBUG: HumanAgent schemas defined.")
 
 # app/schemas/schemas.py
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any
+
 
 # ... (tus otros schemas, como los de AppUser, Roles, etc. van aquí arriba) ...
 
@@ -847,4 +896,9 @@ print("SCHEMA_PY_DEBUG: Auth & Token schemas defined.")
 # =====================================================
 # --- SCHEMAS PARA EL ASISTENTE DE GENERACIÓN DE PROMPTS ---
 # =====================================================
+
+# app/schemas/schemas.py
+# (Añadir al final del archivo o donde tengas los schemas relacionados con ApiClient)
+
+ 
 

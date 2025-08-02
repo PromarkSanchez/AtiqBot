@@ -5,18 +5,18 @@
  * Un backend API en Python (FastAPI) para un chatbot avanzado con IA, configurable, capaz de conectarse a diversas fuentes de contexto y con gestión de permisos para administradores.
  * OpenAPI spec version: 0.2.0
  */
-import type { SPParameter } from './sPParameter';
+import type { ToolParameter } from './toolParameter';
 
 /**
- * Define un Stored Procedure o Función de BD como una 'Herramienta' usable por el LLM.
+ * Define un Stored Procedure o Función de BD como una 'Herramienta' completa.
  */
 export interface StoredProcedureToolOutput {
-  /** Un nombre corto y único para la herramienta (ej: 'obtener_notas_alumno'). */
+  /** Nombre único y descriptivo para la herramienta (ej: 'obtener_notas_del_alumno'). */
   tool_name: string;
-  /** El nombre real y completo del SP o función en la BD (ej: 'acad.usp_obtener_notas_alumno'). */
-  procedure_name: string;
-  /** Descripción detallada para que el LLM principal sepa cuándo y para qué elegir esta herramienta. */
+  /** Descripción para que un LLM de alto nivel sepa cuándo podría usarse esta herramienta (funcionalidad futura). */
   description_for_llm: string;
-  /** Lista de parámetros que requiere el SP/función. */
-  parameters?: SPParameter[];
+  /** Nombre completo y real del SP o Función en la BD (ej: 'acad.fn_app_obtener_notas_curso'). */
+  procedure_name: string;
+  /** La lista de todos los parámetros que la herramienta necesita. */
+  parameters?: ToolParameter[];
 }

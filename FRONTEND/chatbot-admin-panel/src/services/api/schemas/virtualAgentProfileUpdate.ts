@@ -16,6 +16,8 @@ import type { VirtualAgentProfileUpdateLlmModelConfigId } from './virtualAgentPr
 import type { VirtualAgentProfileUpdateTemperatureOverride } from './virtualAgentProfileUpdateTemperatureOverride';
 import type { VirtualAgentProfileUpdateMaxTokensOverride } from './virtualAgentProfileUpdateMaxTokensOverride';
 import type { VirtualAgentProfileUpdateIsActive } from './virtualAgentProfileUpdateIsActive';
+import type { VirtualAgentProfileUpdateDefaultUserRole } from './virtualAgentProfileUpdateDefaultUserRole';
+import type { VirtualAgentProfileUpdateFallbackPrompt } from './virtualAgentProfileUpdateFallbackPrompt';
 
 export interface VirtualAgentProfileUpdate {
   name?: VirtualAgentProfileUpdateName;
@@ -29,4 +31,6 @@ export interface VirtualAgentProfileUpdate {
   temperature_override?: VirtualAgentProfileUpdateTemperatureOverride;
   max_tokens_override?: VirtualAgentProfileUpdateMaxTokensOverride;
   is_active?: VirtualAgentProfileUpdateIsActive;
+  default_user_role?: VirtualAgentProfileUpdateDefaultUserRole;
+  fallback_prompt?: VirtualAgentProfileUpdateFallbackPrompt;
 }

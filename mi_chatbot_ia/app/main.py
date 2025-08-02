@@ -133,6 +133,8 @@ app.include_router(admin_menus_endpoints.router_me, tags=["Admin - Menu Manageme
 
 # --- API & Data Configuration Endpoints ---
 app.include_router(api_client_endpoints.router, tags=["Admin - API Clients"])
+app.include_router(api_client_endpoints.public_router, tags=["Public - Webchat"])
+
 app.include_router(context_definition_endpoints.router, tags=["Admin - Context & Data Sources"])
 app.include_router(document_source_endpoints.router, tags=["Admin - Context & Data Sources"])
 app.include_router(db_connection_endpoints.router, tags=["Admin - Context & Data Sources"])

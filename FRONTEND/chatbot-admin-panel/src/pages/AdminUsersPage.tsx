@@ -9,7 +9,7 @@ import {
 } from '../services/api/endpoints'; 
 
 // --> AÑADIMOS EL TIPO AppUserLocalCreate
-import type { AppUserResponse, AppUserUpdateByAdmin, AppUserLocalCreate, HTTPValidationError } from '../services/api/schemas';
+import type { AppUserResponse, AppUserUpdateByAdmin, AppUserLocalCreate } from '../services/api/schemas';
 import type { AxiosError } from 'axios';
 import { useQueryClient } from '@tanstack/react-query'; // Añadimos para invalidar caché
 import toast, { Toaster } from 'react-hot-toast'; 
@@ -34,7 +34,6 @@ const AdminUsersPage: React.FC = () => {
     data: apiResponse,
     isLoading: isLoadingUsers,
     isError: isUsersError,
-    refetch: refetchUsers,
   } = useReadAllAppUsersEndpointApiV1AdminAppUserManagementGet({ skip: 0, limit: 200 });
 
   // --- LAS 3 MUTACIONES ---
@@ -45,7 +44,7 @@ const AdminUsersPage: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['readAllAppUsersEndpointApiV1AdminAppUserManagementGet'] });
         handleCloseModal();
       },
-      onError: (error) => { /* Tu manejo de error existente */ },
+      onError: () => { /* Tu manejo de error existente */ },
     },
   });
   
@@ -56,7 +55,7 @@ const AdminUsersPage: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['readAllAppUsersEndpointApiV1AdminAppUserManagementGet'] });
         handleCloseDeleteModal();
       },
-      onError: (error) => { /* Tu manejo de error existente */ },
+      onError: () => { /* Tu manejo de error existente */ },
     }
   });
 

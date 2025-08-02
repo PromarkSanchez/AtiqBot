@@ -8,6 +8,7 @@
 import type { ApiClientResponseDescription } from './apiClientResponseDescription';
 import type { ApiClientSettingsSchema } from './apiClientSettingsSchema';
 import type { ContextDefinitionBriefForApiClient } from './contextDefinitionBriefForApiClient';
+import type { ApiClientResponseWebchatUiConfig } from './apiClientResponseWebchatUiConfig';
 
 export interface ApiClientResponse {
   /**
@@ -22,4 +23,5 @@ export interface ApiClientResponse {
   created_at: string;
   updated_at: string;
   allowed_contexts_details?: ContextDefinitionBriefForApiClient[];
+  webchat_ui_config?: ApiClientResponseWebchatUiConfig;
 }

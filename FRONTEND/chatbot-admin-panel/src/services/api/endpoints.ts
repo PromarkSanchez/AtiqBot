@@ -68,7 +68,7 @@ import type {
   MFASetupInitiateResponseSchema,
   MFAVerifyRequestSchema,
   MfaSetupConfirmApiV1AdminAuthMfaSetupConfirmPost200,
-  ReadAllApiClientsParams,
+  ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams,
   ReadAllAppUsersEndpointApiV1AdminAppUserManagementGetParams,
   ReadAllContextDefinitionsEndpointApiV1AdminContextDefinitionsGetParams,
   ReadAllDbConnectionsApiV1AdminDbConnectionsGetParams,
@@ -87,7 +87,8 @@ import type {
   UserResponse,
   VirtualAgentProfileCreate,
   VirtualAgentProfileResponse,
-  VirtualAgentProfileUpdate
+  VirtualAgentProfileUpdate,
+  WebchatUIConfig
 } from './schemas';
 
 import { axiosInstance } from './axiosInstance';
@@ -2021,12 +2022,9 @@ export function useGetMyAuthorizedMenusApiV1AdminMeMenusGet<TData = Awaited<Retu
 
 
 /**
- * Crea un nuevo cliente API y genera una API Key única para él.
-La API Key generada (api_key_plain) será parte de la respuesta y DEBE ser copiada.
-El objeto `settings` debe adherirse a `ApiClientSettingsSchema`.
- * @summary Create New API Client
+ * @summary Create New Api Client Endpoint
  */
-export const createNewApiClient = (
+export const createNewApiClientEndpointApiV1AdminApiClientsPost = (
     apiClientCreate: ApiClientCreate,
  options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
 ) => {
@@ -2042,11 +2040,11 @@ export const createNewApiClient = (
   
 
 
-export const getCreateNewApiClientMutationOptions = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNewApiClient>>, TError,{data: ApiClientCreate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createNewApiClient>>, TError,{data: ApiClientCreate}, TContext> => {
+export const getCreateNewApiClientEndpointApiV1AdminApiClientsPostMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>, TError,{data: ApiClientCreate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>, TError,{data: ApiClientCreate}, TContext> => {
 
-const mutationKey = ['createNewApiClient'];
+const mutationKey = ['createNewApiClientEndpointApiV1AdminApiClientsPost'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2056,10 +2054,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createNewApiClient>>, {data: ApiClientCreate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>, {data: ApiClientCreate}> = (props) => {
           const {data} = props ?? {};
 
-          return  createNewApiClient(data,requestOptions)
+          return  createNewApiClientEndpointApiV1AdminApiClientsPost(data,requestOptions)
         }
 
         
@@ -2067,34 +2065,32 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateNewApiClientMutationResult = NonNullable<Awaited<ReturnType<typeof createNewApiClient>>>
-    export type CreateNewApiClientMutationBody = ApiClientCreate
-    export type CreateNewApiClientMutationError = ErrorType<HTTPValidationError>
+    export type CreateNewApiClientEndpointApiV1AdminApiClientsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>>
+    export type CreateNewApiClientEndpointApiV1AdminApiClientsPostMutationBody = ApiClientCreate
+    export type CreateNewApiClientEndpointApiV1AdminApiClientsPostMutationError = ErrorType<HTTPValidationError>
 
     /**
- * @summary Create New API Client
+ * @summary Create New Api Client Endpoint
  */
-export const useCreateNewApiClient = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNewApiClient>>, TError,{data: ApiClientCreate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+export const useCreateNewApiClientEndpointApiV1AdminApiClientsPost = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>, TError,{data: ApiClientCreate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createNewApiClient>>,
+        Awaited<ReturnType<typeof createNewApiClientEndpointApiV1AdminApiClientsPost>>,
         TError,
         {data: ApiClientCreate},
         TContext
       > => {
 
-      const mutationOptions = getCreateNewApiClientMutationOptions(options);
+      const mutationOptions = getCreateNewApiClientEndpointApiV1AdminApiClientsPostMutationOptions(options);
 
       return useMutation(mutationOptions , queryClient);
     }
     
 /**
- * Obtiene una lista de clientes API (paginada).
-No se muestra `api_key_plain`. Se incluyen `allowed_contexts_details`.
- * @summary Read All API Clients
+ * @summary Read All Api Clients Endpoint
  */
-export const readAllApiClients = (
-    params?: ReadAllApiClientsParams,
+export const readAllApiClientsEndpointApiV1AdminApiClientsGet = (
+    params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams,
  options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
 ) => {
       
@@ -2107,67 +2103,67 @@ export const readAllApiClients = (
     }
   
 
-export const getReadAllApiClientsQueryKey = (params?: ReadAllApiClientsParams,) => {
+export const getReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryKey = (params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams,) => {
     return [`/api/v1/admin/api_clients/`, ...(params ? [params]: [])] as const;
     }
 
     
-export const getReadAllApiClientsQueryOptions = <TData = Awaited<ReturnType<typeof readAllApiClients>>, TError = ErrorType<HTTPValidationError>>(params?: ReadAllApiClientsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export const getReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryOptions = <TData = Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError = ErrorType<HTTPValidationError>>(params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getReadAllApiClientsQueryKey(params);
+  const queryKey =  queryOptions?.queryKey ?? getReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryKey(params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof readAllApiClients>>> = ({ signal }) => readAllApiClients(params, requestOptions, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>> = ({ signal }) => readAllApiClientsEndpointApiV1AdminApiClientsGet(params, requestOptions, signal);
 
       
 
       
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ReadAllApiClientsQueryResult = NonNullable<Awaited<ReturnType<typeof readAllApiClients>>>
-export type ReadAllApiClientsQueryError = ErrorType<HTTPValidationError>
+export type ReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryResult = NonNullable<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>>
+export type ReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryError = ErrorType<HTTPValidationError>
 
 
-export function useReadAllApiClients<TData = Awaited<ReturnType<typeof readAllApiClients>>, TError = ErrorType<HTTPValidationError>>(
- params: undefined |  ReadAllApiClientsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData>> & Pick<
+export function useReadAllApiClientsEndpointApiV1AdminApiClientsGet<TData = Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError = ErrorType<HTTPValidationError>>(
+ params: undefined |  ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof readAllApiClients>>,
+          Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>,
           TError,
-          Awaited<ReturnType<typeof readAllApiClients>>
+          Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>
         > , 'initialData'
       >, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useReadAllApiClients<TData = Awaited<ReturnType<typeof readAllApiClients>>, TError = ErrorType<HTTPValidationError>>(
- params?: ReadAllApiClientsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData>> & Pick<
+export function useReadAllApiClientsEndpointApiV1AdminApiClientsGet<TData = Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError = ErrorType<HTTPValidationError>>(
+ params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof readAllApiClients>>,
+          Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>,
           TError,
-          Awaited<ReturnType<typeof readAllApiClients>>
+          Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>
         > , 'initialData'
       >, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useReadAllApiClients<TData = Awaited<ReturnType<typeof readAllApiClients>>, TError = ErrorType<HTTPValidationError>>(
- params?: ReadAllApiClientsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export function useReadAllApiClientsEndpointApiV1AdminApiClientsGet<TData = Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError = ErrorType<HTTPValidationError>>(
+ params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Read All API Clients
+ * @summary Read All Api Clients Endpoint
  */
 
-export function useReadAllApiClients<TData = Awaited<ReturnType<typeof readAllApiClients>>, TError = ErrorType<HTTPValidationError>>(
- params?: ReadAllApiClientsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClients>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export function useReadAllApiClientsEndpointApiV1AdminApiClientsGet<TData = Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError = ErrorType<HTTPValidationError>>(
+ params?: ReadAllApiClientsEndpointApiV1AdminApiClientsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readAllApiClientsEndpointApiV1AdminApiClientsGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getReadAllApiClientsQueryOptions(params,options)
+  const queryOptions = getReadAllApiClientsEndpointApiV1AdminApiClientsGetQueryOptions(params,options)
 
   const query = useQuery(queryOptions , queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2180,11 +2176,9 @@ export function useReadAllApiClients<TData = Awaited<ReturnType<typeof readAllAp
 
 
 /**
- * Obtiene un cliente API por su ID.
-No se muestra `api_key_plain`. Se incluyen `allowed_contexts_details`.
- * @summary Read API Client by ID
+ * @summary Read Api Client By Id Endpoint
  */
-export const readApiClientById = (
+export const readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet = (
     apiClientId: number,
  options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
 ) => {
@@ -2197,67 +2191,67 @@ export const readApiClientById = (
     }
   
 
-export const getReadApiClientByIdQueryKey = (apiClientId: number,) => {
+export const getReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryKey = (apiClientId: number,) => {
     return [`/api/v1/admin/api_clients/${apiClientId}`] as const;
     }
 
     
-export const getReadApiClientByIdQueryOptions = <TData = Awaited<ReturnType<typeof readApiClientById>>, TError = ErrorType<HTTPValidationError>>(apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export const getReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryOptions = <TData = Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError = ErrorType<HTTPValidationError>>(apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getReadApiClientByIdQueryKey(apiClientId);
+  const queryKey =  queryOptions?.queryKey ?? getReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryKey(apiClientId);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof readApiClientById>>> = ({ signal }) => readApiClientById(apiClientId, requestOptions, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>> = ({ signal }) => readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet(apiClientId, requestOptions, signal);
 
       
 
       
 
-   return  { queryKey, queryFn, enabled: !!(apiClientId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, enabled: !!(apiClientId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type ReadApiClientByIdQueryResult = NonNullable<Awaited<ReturnType<typeof readApiClientById>>>
-export type ReadApiClientByIdQueryError = ErrorType<HTTPValidationError>
+export type ReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>>
+export type ReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryError = ErrorType<HTTPValidationError>
 
 
-export function useReadApiClientById<TData = Awaited<ReturnType<typeof readApiClientById>>, TError = ErrorType<HTTPValidationError>>(
- apiClientId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData>> & Pick<
+export function useReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet<TData = Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ apiClientId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof readApiClientById>>,
+          Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>,
           TError,
-          Awaited<ReturnType<typeof readApiClientById>>
+          Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>
         > , 'initialData'
       >, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useReadApiClientById<TData = Awaited<ReturnType<typeof readApiClientById>>, TError = ErrorType<HTTPValidationError>>(
- apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData>> & Pick<
+export function useReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet<TData = Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof readApiClientById>>,
+          Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>,
           TError,
-          Awaited<ReturnType<typeof readApiClientById>>
+          Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>
         > , 'initialData'
       >, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useReadApiClientById<TData = Awaited<ReturnType<typeof readApiClientById>>, TError = ErrorType<HTTPValidationError>>(
- apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export function useReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet<TData = Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Read API Client by ID
+ * @summary Read Api Client By Id Endpoint
  */
 
-export function useReadApiClientById<TData = Awaited<ReturnType<typeof readApiClientById>>, TError = ErrorType<HTTPValidationError>>(
- apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientById>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+export function useReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet<TData = Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ apiClientId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getReadApiClientByIdQueryOptions(apiClientId,options)
+  const queryOptions = getReadApiClientByIdEndpointApiV1AdminApiClientsApiClientIdGetQueryOptions(apiClientId,options)
 
   const query = useQuery(queryOptions , queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2270,11 +2264,9 @@ export function useReadApiClientById<TData = Awaited<ReturnType<typeof readApiCl
 
 
 /**
- * Actualiza un cliente API existente. No regenera la API Key.
-El objeto `settings` (si se envía) debe adherirse a `ApiClientSettingsSchema`.
- * @summary Update Existing API Client
+ * @summary Update Existing Api Client Endpoint
  */
-export const updateApiClientById = (
+export const updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut = (
     apiClientId: number,
     apiClientUpdate: ApiClientUpdate,
  options?: SecondParameter<typeof axiosInstance>,) => {
@@ -2290,11 +2282,11 @@ export const updateApiClientById = (
   
 
 
-export const getUpdateApiClientByIdMutationOptions = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateApiClientById>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateApiClientById>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext> => {
+export const getUpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPutMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext> => {
 
-const mutationKey = ['updateApiClientById'];
+const mutationKey = ['updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2304,10 +2296,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateApiClientById>>, {apiClientId: number;data: ApiClientUpdate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>, {apiClientId: number;data: ApiClientUpdate}> = (props) => {
           const {apiClientId,data} = props ?? {};
 
-          return  updateApiClientById(apiClientId,data,requestOptions)
+          return  updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut(apiClientId,data,requestOptions)
         }
 
         
@@ -2315,32 +2307,31 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UpdateApiClientByIdMutationResult = NonNullable<Awaited<ReturnType<typeof updateApiClientById>>>
-    export type UpdateApiClientByIdMutationBody = ApiClientUpdate
-    export type UpdateApiClientByIdMutationError = ErrorType<HTTPValidationError>
+    export type UpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPutMutationResult = NonNullable<Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>>
+    export type UpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPutMutationBody = ApiClientUpdate
+    export type UpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPutMutationError = ErrorType<HTTPValidationError>
 
     /**
- * @summary Update Existing API Client
+ * @summary Update Existing Api Client Endpoint
  */
-export const useUpdateApiClientById = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateApiClientById>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+export const useUpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>, TError,{apiClientId: number;data: ApiClientUpdate}, TContext>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateApiClientById>>,
+        Awaited<ReturnType<typeof updateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPut>>,
         TError,
         {apiClientId: number;data: ApiClientUpdate},
         TContext
       > => {
 
-      const mutationOptions = getUpdateApiClientByIdMutationOptions(options);
+      const mutationOptions = getUpdateExistingApiClientEndpointApiV1AdminApiClientsApiClientIdPutMutationOptions(options);
 
       return useMutation(mutationOptions , queryClient);
     }
     
 /**
- * Elimina un cliente API.
- * @summary Delete API Client
+ * @summary Delete Api Client Endpoint
  */
-export const deleteApiClientById = (
+export const deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete = (
     apiClientId: number,
  options?: SecondParameter<typeof axiosInstance>,) => {
       
@@ -2353,11 +2344,11 @@ export const deleteApiClientById = (
   
 
 
-export const getDeleteApiClientByIdMutationOptions = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientById>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientById>>, TError,{apiClientId: number}, TContext> => {
+export const getDeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDeleteMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>, TError,{apiClientId: number}, TContext> => {
 
-const mutationKey = ['deleteApiClientById'];
+const mutationKey = ['deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2367,10 +2358,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteApiClientById>>, {apiClientId: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>, {apiClientId: number}> = (props) => {
           const {apiClientId} = props ?? {};
 
-          return  deleteApiClientById(apiClientId,requestOptions)
+          return  deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete(apiClientId,requestOptions)
         }
 
         
@@ -2378,33 +2369,31 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteApiClientByIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteApiClientById>>>
+    export type DeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>>
     
-    export type DeleteApiClientByIdMutationError = ErrorType<HTTPValidationError>
+    export type DeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDeleteMutationError = ErrorType<HTTPValidationError>
 
     /**
- * @summary Delete API Client
+ * @summary Delete Api Client Endpoint
  */
-export const useDeleteApiClientById = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientById>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+export const useDeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteApiClientById>>,
+        Awaited<ReturnType<typeof deleteApiClientEndpointApiV1AdminApiClientsApiClientIdDelete>>,
         TError,
         {apiClientId: number},
         TContext
       > => {
 
-      const mutationOptions = getDeleteApiClientByIdMutationOptions(options);
+      const mutationOptions = getDeleteApiClientEndpointApiV1AdminApiClientsApiClientIdDeleteMutationOptions(options);
 
       return useMutation(mutationOptions , queryClient);
     }
     
 /**
- * Genera una nueva API Key para un cliente existente y la devuelve (una vez).
-La clave antigua se invalida.
- * @summary Regenerate API Key
+ * @summary Regenerate Api Key For Client Endpoint
  */
-export const regenerateApiKeyForClient = (
+export const regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost = (
     apiClientId: number,
  options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
 ) => {
@@ -2418,11 +2407,11 @@ export const regenerateApiKeyForClient = (
   
 
 
-export const getRegenerateApiKeyForClientMutationOptions = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClient>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClient>>, TError,{apiClientId: number}, TContext> => {
+export const getRegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPostMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>, TError,{apiClientId: number}, TContext> => {
 
-const mutationKey = ['regenerateApiKeyForClient'];
+const mutationKey = ['regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2432,10 +2421,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateApiKeyForClient>>, {apiClientId: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>, {apiClientId: number}> = (props) => {
           const {apiClientId} = props ?? {};
 
-          return  regenerateApiKeyForClient(apiClientId,requestOptions)
+          return  regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost(apiClientId,requestOptions)
         }
 
         
@@ -2443,27 +2432,180 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type RegenerateApiKeyForClientMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateApiKeyForClient>>>
+    export type RegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPostMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>>
     
-    export type RegenerateApiKeyForClientMutationError = ErrorType<HTTPValidationError>
+    export type RegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPostMutationError = ErrorType<HTTPValidationError>
 
     /**
- * @summary Regenerate API Key
+ * @summary Regenerate Api Key For Client Endpoint
  */
-export const useRegenerateApiKeyForClient = <TError = ErrorType<HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClient>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+export const useRegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>, TError,{apiClientId: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof regenerateApiKeyForClient>>,
+        Awaited<ReturnType<typeof regenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPost>>,
         TError,
         {apiClientId: number},
         TContext
       > => {
 
-      const mutationOptions = getRegenerateApiKeyForClientMutationOptions(options);
+      const mutationOptions = getRegenerateApiKeyForClientEndpointApiV1AdminApiClientsApiClientIdRegenerateKeyPostMutationOptions(options);
 
       return useMutation(mutationOptions , queryClient);
     }
     
+/**
+ * @summary Update Webchat Ui Config Endpoint
+ */
+export const updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut = (
+    apiClientId: number,
+    webchatUIConfig: WebchatUIConfig,
+ options?: SecondParameter<typeof axiosInstance>,) => {
+      
+      
+      return axiosInstance<ApiClientResponse>(
+      {url: `/api/v1/admin/api_clients/${apiClientId}/webchat-ui-config`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: webchatUIConfig
+    },
+      options);
+    }
+  
+
+
+export const getUpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPutMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>, TError,{apiClientId: number;data: WebchatUIConfig}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>, TError,{apiClientId: number;data: WebchatUIConfig}, TContext> => {
+
+const mutationKey = ['updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>, {apiClientId: number;data: WebchatUIConfig}> = (props) => {
+          const {apiClientId,data} = props ?? {};
+
+          return  updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut(apiClientId,data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPutMutationResult = NonNullable<Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>>
+    export type UpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPutMutationBody = WebchatUIConfig
+    export type UpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPutMutationError = ErrorType<HTTPValidationError>
+
+    /**
+ * @summary Update Webchat Ui Config Endpoint
+ */
+export const useUpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>, TError,{apiClientId: number;data: WebchatUIConfig}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut>>,
+        TError,
+        {apiClientId: number;data: WebchatUIConfig},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPutMutationOptions(options);
+
+      return useMutation(mutationOptions , queryClient);
+    }
+    
+/**
+ * @summary Get Public Webchat UI Configuration
+ */
+export const getPublicWebchatConfigApiV1PublicWebchatConfigGet = (
+    
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+      
+      
+      return axiosInstance<WebchatUIConfig>(
+      {url: `/api/v1/public/webchat-config`, method: 'GET', signal
+    },
+      options);
+    }
+  
+
+export const getGetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryKey = () => {
+    return [`/api/v1/public/webchat-config`] as const;
+    }
+
+    
+export const getGetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryOptions = <TData = Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError = ErrorType<HTTPValidationError>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>> = ({ signal }) => getPublicWebchatConfigApiV1PublicWebchatConfigGet(requestOptions, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>>
+export type GetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryError = ErrorType<HTTPValidationError>
+
+
+export function useGetPublicWebchatConfigApiV1PublicWebchatConfigGet<TData = Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError = ErrorType<HTTPValidationError>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPublicWebchatConfigApiV1PublicWebchatConfigGet<TData = Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError = ErrorType<HTTPValidationError>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPublicWebchatConfigApiV1PublicWebchatConfigGet<TData = Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError = ErrorType<HTTPValidationError>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Public Webchat UI Configuration
+ */
+
+export function useGetPublicWebchatConfigApiV1PublicWebchatConfigGet<TData = Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError = ErrorType<HTTPValidationError>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicWebchatConfigApiV1PublicWebchatConfigGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPublicWebchatConfigApiV1PublicWebchatConfigGetQueryOptions(options)
+
+  const query = useQuery(queryOptions , queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
 /**
  * @summary Create New Context Definition
  */
@@ -3572,8 +3714,6 @@ export const useDeleteDbConnectionEntryApiV1AdminDbConnectionsConnIdDelete = <TE
     }
     
 /**
- * Se conecta a la base de datos de destino y devuelve una lista de sus tablas, esquemas y columnas.
-Endpoint esencial para configurar contextos de tipo DATABASE_QUERY.
  * @summary Inspeccionar una Conexión para listar Tablas y Columnas
  */
 export const inspectDbConnectionEndpointApiV1AdminDbConnectionsConnIdInspectGet = (
@@ -5205,7 +5345,8 @@ export const useDeleteHumanAgentEndpointApiV1HumanAgentGroupsHumanAgentsAgentIdD
     }
     
 /**
- * @summary Health Check Endpoint
+ * Endpoint de monitoreo para verificar que la aplicación está viva.
+ * @summary Health Check
  */
 export const healthCheckHealthGet = (
     
@@ -5272,7 +5413,7 @@ export function useHealthCheckHealthGet<TData = Awaited<ReturnType<typeof health
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Health Check Endpoint
+ * @summary Health Check
  */
 
 export function useHealthCheckHealthGet<TData = Awaited<ReturnType<typeof healthCheckHealthGet>>, TError = ErrorType<unknown>>(

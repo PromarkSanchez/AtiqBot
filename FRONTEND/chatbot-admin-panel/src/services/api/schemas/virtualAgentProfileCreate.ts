@@ -12,6 +12,8 @@ import type { VirtualAgentProfileCreateGreetingPrompt } from './virtualAgentProf
 import type { VirtualAgentProfileCreateNameConfirmationPrompt } from './virtualAgentProfileCreateNameConfirmationPrompt';
 import type { VirtualAgentProfileCreateTemperatureOverride } from './virtualAgentProfileCreateTemperatureOverride';
 import type { VirtualAgentProfileCreateMaxTokensOverride } from './virtualAgentProfileCreateMaxTokensOverride';
+import type { VirtualAgentProfileCreateDefaultUserRole } from './virtualAgentProfileCreateDefaultUserRole';
+import type { VirtualAgentProfileCreateFallbackPrompt } from './virtualAgentProfileCreateFallbackPrompt';
 import type { VirtualAgentProfileCreateCharacterSheetJson } from './virtualAgentProfileCreateCharacterSheetJson';
 
 export interface VirtualAgentProfileCreate {
@@ -25,5 +27,7 @@ export interface VirtualAgentProfileCreate {
   temperature_override?: VirtualAgentProfileCreateTemperatureOverride;
   max_tokens_override?: VirtualAgentProfileCreateMaxTokensOverride;
   is_active?: boolean;
+  default_user_role?: VirtualAgentProfileCreateDefaultUserRole;
+  fallback_prompt?: VirtualAgentProfileCreateFallbackPrompt;
   character_sheet_json?: VirtualAgentProfileCreateCharacterSheetJson;
 }

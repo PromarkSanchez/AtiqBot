@@ -1,0 +1,40 @@
+/* Archivo: src/widget.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+    Regla de posicionamiento principal.
+    Al estar dentro de @layer base, se integra correctamente
+    en el sistema de capas de Tailwind.
+  */
+  #atiqtec-chatbot-widget-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 400px;
+    height: 600px;
+    max-width: 90vw;
+    max-height: 80vh;
+    z-index: 2147483647; /* Un z-index muy alto para estar por encima de todo */
+  }
+
+  /*
+    Nuestro preflight manual que SOLO se aplica
+    a los elementos DENTRO del contenedor.
+  */
+  #atiqtec-chatbot-widget-container {
+    *, ::before, ::after {
+      box-sizing: border-box;
+      border-width: 0;
+      border-style: solid;
+      border-color: theme('borderColor.DEFAULT', currentColor);
+    }
+    
+    a {
+      color: inherit;
+      text-decoration: inherit;
+    }
+  }
+}

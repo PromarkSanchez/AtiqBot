@@ -1,8 +1,12 @@
 // src/pages/AdminChatTestPage.tsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useReadAllApiClients, useProcessChatMessageApiV1ChatPost } from '../services/api/endpoints';
-import type { ReadAllApiClientsParams, ApiClientResponse, ApiClientSettingsSchema, ChatRequest, ChatResponse } from '../services/api/schemas';
+import { 
+  useReadAllApiClientsEndpointApiV1AdminApiClientsGet as  useReadAllApiClients, 
+  
+  
+  useProcessChatMessageApiV1ChatPost } from '../services/api/endpoints';
+import type { ReadAllApiClientsParams, ApiClientSettingsSchema, ChatRequest } from '../services/api/schemas';
 
 import toast, { Toaster } from 'react-hot-toast';
 import { PaperAirplaneIcon } from '@heroicons/react/24/outline';
@@ -27,7 +31,7 @@ const AdminChatTestPage: React.FC = () => {
   const [sessionId, setSessionId] = useState<string>(`test-session-${Date.now()}`);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [realUserDni, setRealUserDni] = useState<string>('');
-  const [userName, setUserName] = useState<string>('Visitante');
+  const [userName] = useState<string>('Visitante');
   
   const [currentMessageText, setCurrentMessageText] = useState<string>('');
   const [chatHistory, setChatHistory] = useState<Message[]>([]);

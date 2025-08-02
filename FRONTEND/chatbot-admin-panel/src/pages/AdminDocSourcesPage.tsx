@@ -10,10 +10,8 @@ import type {
   DocumentSourceResponse, 
   DocumentSourceCreate, 
   DocumentSourceUpdate,
-  HTTPValidationError,
 } from '../services/api/schemas';
 import toast, { Toaster } from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 
 import PageHeader from '../components/ui/PageHeader';
 import Modal from '../components/shared/Modal';
@@ -39,8 +37,7 @@ const AdminDocSourcesPage: React.FC = () => {
   const docSources = docSourcesData || [];
 
   // --- Lógica de Mutaciones y Manejo de Errores ---
-  const handleMutationError = useCallback((err: unknown, defaultMessage: string) => {
-    const axiosError = err as AxiosError<HTTPValidationError | { detail?: string }>;
+  const handleMutationError = useCallback((_err: unknown, defaultMessage: string) => {
     let message = defaultMessage;
     // ... tu lógica de manejo de errores si la tienes ...
     toast.error(message, { duration: 5000 });
@@ -131,7 +128,6 @@ const AdminDocSourcesPage: React.FC = () => {
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
-  const isLoadingSomeMutation = isSubmitting || deleteMutation.isPending;
 
   return (
     <div>

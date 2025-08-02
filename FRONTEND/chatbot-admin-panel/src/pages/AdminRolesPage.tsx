@@ -8,15 +8,14 @@ import {
   useAssignMenuPermissionToRoleApiV1AdminRolesRoleIdMenusPost,
   useRemoveMenuPermissionFromRoleApiV1AdminRolesRoleIdMenusMenuIdDelete,
 } from '../services/api/endpoints';
-import type { RoleResponse, RoleCreate, RoleUpdate, RoleCreateDescription } from '../services/api/schemas'; 
-import type { AxiosError } from 'axios';
+import type { RoleResponse, RoleCreate, RoleUpdate } from '../services/api/schemas'; 
 import toast, { Toaster } from 'react-hot-toast';
 
 import Modal from '../components/shared/Modal';
 import RoleForm from '../components/admin/roles/RoleForm';
 import PageHeader from '../components/ui/PageHeader'; // Importación corregida
 import { Button, IconButton } from '../components/shared/Button';
-import { PlusIcon, PencilSquareIcon, TrashIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const AdminRolesPage: React.FC = () => {
   // --- Estados ---

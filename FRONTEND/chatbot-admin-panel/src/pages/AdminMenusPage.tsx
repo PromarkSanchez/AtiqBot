@@ -1,7 +1,6 @@
 // src/pages/AdminMenusPage.tsx
 import React, { useState, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 
 import {
   useGetAllMenuItemsApiV1AdminMenusGet,
@@ -9,7 +8,7 @@ import {
   useUpdateMenuItemApiV1AdminMenusMenuIdPut,
   useDeleteMenuItemApiV1AdminMenusMenuIdDelete,
 } from '../services/api/endpoints';
-import type { AdminPanelMenuResponse, AdminPanelMenuCreate, AdminPanelMenuUpdate, HTTPValidationError } from '../services/api/schemas';
+import type { AdminPanelMenuResponse, AdminPanelMenuCreate, AdminPanelMenuUpdate } from '../services/api/schemas';
 
 import PageHeader from '../components/ui/PageHeader';
 import Modal from '../components/shared/Modal';
@@ -37,8 +36,7 @@ const AdminMenusPage: React.FC = () => {
 
   // --- Lógica de Mutaciones y Manejo de Errores (similar a tu ApiClientPage) ---
 
-  const handleMutationError = useCallback((err: unknown, defaultMessage: string) => {
-    const axiosError = err as AxiosError<HTTPValidationError | { detail?: string }>;
+  const handleMutationError = useCallback((_err: unknown, defaultMessage: string) => {
     let message = defaultMessage;
     // ... tu lógica de manejo de errores ...
     toast.error(message, { duration: 5000 });

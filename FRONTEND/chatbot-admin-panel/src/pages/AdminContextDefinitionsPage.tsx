@@ -1,5 +1,5 @@
 // src/pages/AdminContextDefinitionsPage.tsx
-import React, { useState, useEffect } from 'react'; // Añadido useEffect si lo usas
+import React, { useState } from 'react'; // Añadido useEffect si lo usas
 import {
   useReadAllContextDefinitionsEndpointApiV1AdminContextDefinitionsGet,
   useCreateNewContextDefinitionEndpointApiV1AdminContextDefinitionsPost,
@@ -42,11 +42,7 @@ const AdminContextDefinitionsPage: React.FC = () => {
   );
   const queryParams = { skip: 0, limit: 100 }; // Ajusta según necesites
   const {
-    data: apiResponse,
     isLoading: isLoadingContexts,
-    isError: isContextsError,
-    error: contextsErrorData,
-    refetch: refetchContexts,
   } = useReadAllContextDefinitionsEndpointApiV1AdminContextDefinitionsGet(queryParams, {
     query: { queryKey: ['adminContextDefinitionsList', queryParams], staleTime: 1000 * 60 }, // 1 min stale time
   });

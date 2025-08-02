@@ -5,6 +5,7 @@
  * Un backend API en Python (FastAPI) para un chatbot avanzado con IA, configurable, capaz de conectarse a diversas fuentes de contexto y con gestión de permisos para administradores.
  * OpenAPI spec version: 0.2.0
  */
+import type { ChatRequestClientSettings } from './chatRequestClientSettings';
 import type { ChatRequestUserDni } from './chatRequestUserDni';
 import type { ChatRequestUserName } from './chatRequestUserName';
 import type { ChatRequestMetadata } from './chatRequestMetadata';
@@ -27,6 +28,7 @@ export interface ChatRequest {
   session_id: string;
   /** Indica si la sesión pertenece a un usuario autenticado en el sistema anfitrión (ej. Blackboard). */
   is_authenticated_user?: boolean;
+  client_settings?: ChatRequestClientSettings;
   /** DNI REAL y verificado del usuario si está autenticado. */
   user_dni?: ChatRequestUserDni;
   /** Nombre del usuario, puede ser proporcionado por el frontend en cualquier momento. */

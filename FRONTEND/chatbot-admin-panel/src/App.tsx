@@ -1,5 +1,7 @@
 // src/App.tsx (VERSIÓN SIMPLIFICADA FINAL)
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import React, { useEffect } from 'react'; // <--- Asegúrate de importar useEffect
+
 import LoginPage from './pages/LoginPage';
 import AdminLayout from './components/layout/AdminLayout';
 import { useAuth } from './contexts/AuthContext';
@@ -24,6 +26,34 @@ const ProtectedRoute: React.FC = () => {
 };
 
 function App() {
+    // ---> ¡AQUÍ ESTÁ LA MAGIA! <---
+  // Este useEffect se ejecutará solo una vez cuando la aplicación cargue.
+  useEffect(() => {
+    // Función que revisa el tema del SO y actualiza la clase del <html>
+    const updateTheme = () => {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+
+    // Llama a la función una vez al inicio para establecer el tema correcto
+    updateTheme();
+
+    // Añade un "escucha" para que, si cambias el tema de tu Windows
+    // mientras la página está abierta, el tema se actualice automáticamente.
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', updateTheme);
+
+    // Función de limpieza: elimina el "escucha" cuando el componente se desmonte
+    // para evitar problemas de memoria.
+    return () => {
+      mediaQuery.removeEventListener('change', updateTheme);
+    };
+  }, []); // El array vacío [] significa que este efecto solo corre al montar.
+  // ---> FIN DE LA SECCIÓN MÁGICA <---
+
   const { isLoading } = useAuth();
 
   if (isLoading) {
@@ -56,6 +86,8 @@ function App() {
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/virtual-agents" element={<AdminVirtualAgentsPage />} />
           <Route path="webchat-customizer" element={<AdminWebchatCustomizerPage />} />
+          <Route path="webchat-customizer/:apiClientId" element={<AdminWebchatCustomizerPage />} />
+
 
         </Route>
       </Route>

@@ -8,11 +8,12 @@ from .crud_api_client import (
     create_api_client,
     get_api_client_by_id,
     get_api_client_by_name,
-    get_api_client_by_hashed_key, # <--- CAMBIADO SI SE RENOMBRÓ EN crud_api_client.py
+    get_api_client_by_hashed_key,
     get_api_clients,
     update_api_client,
     regenerate_api_key,
-    delete_api_client
+    delete_api_client,
+    update_api_client_webchat_config, # <--- ¡IMPORTANTE! Exportamos la nueva función
 )
 
 # --- Para ContextDefinition ---

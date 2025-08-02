@@ -1,8 +1,9 @@
-// tailwind.config.js o tailwind.config.cjs
+// Archivo: tailwind.config.cjs
 module.exports = {
-  darkMode: 'media', // o 'class' si quieres controlarlo manualmente con JS
+  darkMode: 'class', // <--- Clave: Usar 'class' nos da control total.
   content: [
     "./index.html",
+    "./chatbot.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {

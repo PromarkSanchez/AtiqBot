@@ -173,7 +173,7 @@ const ToolParametersControl: React.FC<{ toolIndex: number; control: Control<Form
 // --- COMPONENTE PRINCIPAL DEL FORMULARIO ---
   const ContextDefinitionForm: React.FC<ContextDefinitionFormProps> = ({ initialData, onSubmit, onCancel, isSubmittingGlobal, isEditMode }) => {
   const rhfMethods = useForm<FormValues>({ mode: 'onChange', defaultValues: deepCopy(defaultFormValues) });
-  const { register, handleSubmit, reset, control, watch, setValue, getValues, trigger, formState: { errors, isDirty, isValid: isFormValid }, } = rhfMethods;
+  const { register, handleSubmit, reset, control, watch,  getValues,  formState: { errors, isDirty, isValid: isFormValid }, } = rhfMethods;
 
 
 
@@ -217,8 +217,8 @@ const ToolParametersControl: React.FC<{ toolIndex: number; control: Control<Form
   // useFieldArrays para las partes dinámicas del formulario
   const { fields: toolFields, append: appendTool, remove: removeTool } = useFieldArray({ control, name: "processing_config_database_query.tools" });
   const addToolItem = () => appendTool(deepCopy(defaultStoredProcedureToolValues));
-  const { fields: ruleFields, append: appendRule, remove: removeRule } = useFieldArray({ control, name: "processing_config_database_query.sql_select_policy.column_access_rules" });
-    const { fields: columnAccessRulesFields, append: appendCAR, remove: removeCAR } = useFieldArray({
+  const {  append: appendRule, remove: removeRule } = useFieldArray({ control, name: "processing_config_database_query.sql_select_policy.column_access_rules" });
+    const { fields: columnAccessRulesFields } = useFieldArray({
       control, name: "processing_config_database_query.sql_select_policy.column_access_rules", keyName: "id"
     });
   const addColumnAccessRuleItem = () => appendRule(deepCopy({table_name: '', column_policy: { allowed_columns: [], forbidden_columns: [] }}));
@@ -406,7 +406,6 @@ const ToolParametersControl: React.FC<{ toolIndex: number; control: Control<Form
   const subFieldGroupClass = "p-3 space-y-3 border border-gray-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-700/60";
   const titleClass = "text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-300 dark:border-slate-700 pb-3 mb-4";
   const subTitleClass = "text-md font-semibold text-gray-700 dark:text-gray-200";
-  const toggleButtonClass = "text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium flex items-center py-2";
   const formHelperTextClass = "mt-1 text-xs text-gray-500 dark:text-gray-400";
   const gridLayout = "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4";
 

@@ -14,7 +14,7 @@ import Modal from '../components/shared/Modal';
 import VirtualAgentForm from '../components/admin/virtual-agents/VirtualAgentForm'; // El formulario que creamos
 import PageHeader from '../components/ui/PageHeader';
 import { Button, IconButton } from '../components/shared/Button';
-import { PlusIcon, PencilSquareIcon, TrashIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const AdminVirtualAgentsPage: React.FC = () => {
   // --- Estados ---

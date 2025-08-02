@@ -29,7 +29,12 @@ class Settings(BaseSettings):
         "https://upch-test.blackboard.com", "https://admin-ia.cayetano.pe",
         "https://admin-ia-back.cayetano.pe", "https://cayetano.pe",
         "http://172.17.100.75",
-        "http://127.0.0.1:5500"
+        "http://127.0.0.1:5500",
+        "http://localhost:5173/widget.js",
+        "http://localhost:4173",
+        "http://127.0.0.1:5500",
+        "https://atiqtec.com",
+        "https://tz367z3l-4173.brs.devtunnels.ms"
     ]
 
     # ==========================================================
