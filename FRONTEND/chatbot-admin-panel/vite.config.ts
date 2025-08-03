@@ -8,13 +8,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-<<<<<<< HEAD
     port: 5173,
     allowedHosts: ['admin-ia.cayetano.pe','localhost'],
-=======
-    port: 4173,
-    allowedHosts: ['admin-ia.cayetano.pe'],
->>>>>>> f8a3034a4667313c3c67efbed9758e11660c1414
     // cors: true  <-- Opcional, pero bueno tenerlo para desarrollo
   },
   preview: {
