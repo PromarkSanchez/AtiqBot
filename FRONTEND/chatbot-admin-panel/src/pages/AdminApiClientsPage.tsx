@@ -99,7 +99,7 @@ const AdminApiClientsPage: React.FC = () => {
               <InformationCircleIcon className="h-6 w-6 text-yellow-500 mr-2 shrink-0"/>
               <div className="flex-1">
                   <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Atención</p>
-                  <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">API Key creada pero el backend no devolvió el valor visible. Intenta regenerarla.</p>
+                  <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">Cliente ID creada pero el backend no devolvió el valor visible. Intenta regenerarla.</p>
               </div>
             </div>
           ), {id: 'createKeyInfoNotVisible', duration: 8000});
@@ -139,18 +139,18 @@ const AdminApiClientsPage: React.FC = () => {
     mutation: {
       onSuccess: (responseFromApi: ApiClientWithPlainKeyResponse) => { // Correctamente tipado
         if (responseFromApi?.api_key_plain) {
-            toast.success(`Nueva API Key generada para "${responseFromApi.name}". Cópiala ahora.`);
+            toast.success(`Nueva Cliente ID Generado para "${responseFromApi.name}". Cópialo ahora.`);
             setApiKeyToDisplay(responseFromApi.api_key_plain);
               localStorage.setItem('test_chat_api_key', responseFromApi.api_key_plain);
           if(responseFromApi.settings?.application_id) {
             localStorage.setItem('test_chat_app_id', responseFromApi.settings.application_id);
           }
         } else {
-           toast.error(`No se pudo mostrar la nueva API Key para "${responseFromApi?.name}". Contacta soporte.`, {id: 'regenKeyErrorNotVisible'});
+           toast.error(`No se pudo mostrar la nueva Cliente ID para "${responseFromApi?.name}". Contacta soporte.`, {id: 'regenKeyErrorNotVisible'});
         }
         refetchApiClients();
       },
-      onError: (error) => handleMutationError(error, "Error al regenerar API Key.", "regenerateKeyError")
+      onError: (error) => handleMutationError(error, "Error al regenerar Cliente ID.", "regenerateKeyError")
     }
   });
 
@@ -175,7 +175,7 @@ const AdminApiClientsPage: React.FC = () => {
   };
   
   const handleRegenerateKey = (client: ApiClientResponse) => { 
-    if (window.confirm(`¿Regenerar API Key para "${client.name}"? La clave actual se invalidará y la nueva deberá copiarse inmediatamente.`)) { 
+    if (window.confirm(`¿Regenerar Cliente ID para "${client.name}"? La clave actual se invalidará y la nueva deberá copiarse inmediatamente.`)) { 
       setSelectedApiClientForOps(client); // Para que isLoadingSomeMutation refleje estado en el botón
       regenerateApiKeyMutation.mutate({ apiClientId: client.id }); 
     } 
@@ -215,9 +215,9 @@ const AdminApiClientsPage: React.FC = () => {
       </header>
 
       {apiKeyToDisplay && (
-        <Modal isOpen={!!apiKeyToDisplay} onClose={() => {if (!regenerateApiKeyMutation.isPending && !createApiClientMutation.isPending) setApiKeyToDisplay(null);}} title="API Key Generada ¡Copia Inmediatamente!">
+        <Modal isOpen={!!apiKeyToDisplay} onClose={() => {if (!regenerateApiKeyMutation.isPending && !createApiClientMutation.isPending) setApiKeyToDisplay(null);}} title="Cliente ID Generado ¡Copia Inmediatamente!">
           <div className="p-4 md:p-6 space-y-4">
-            <p className="text-sm text-gray-700 dark:text-gray-300">Esta es la <strong className="text-red-600 dark:text-red-400">única vez</strong> que se mostrará esta API Key. Cópiala y guárdala en un lugar seguro.</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300">Esta es la <strong className="text-red-600 dark:text-red-400">única vez</strong> que se mostrará esta Cliente ID. Cópialo y guárdalo en un lugar seguro.</p>
             <textarea 
               value={apiKeyToDisplay} 
               readOnly 
@@ -226,7 +226,7 @@ const AdminApiClientsPage: React.FC = () => {
               onClick={(e) => (e.target as HTMLTextAreaElement).select()}
             />
             <div className="flex justify-end space-x-3">
-              <Button variant="primary" onClick={() => { navigator.clipboard.writeText(apiKeyToDisplay); toast.success("API Key copiada!"); }} className="bg-blue-500 hover:bg-blue-600 text-xs px-3 py-1.5">Copiar</Button>
+              <Button variant="primary" onClick={() => { navigator.clipboard.writeText(apiKeyToDisplay); toast.success("Cliente ID copiada!"); }} className="bg-blue-500 hover:bg-blue-600 text-xs px-3 py-1.5">Copiar</Button>
               <Button variant="secondary" onClick={() => setApiKeyToDisplay(null)} className="text-xs px-3 py-1.5">Cerrar</Button>
             </div>
           </div>
@@ -317,7 +317,7 @@ const AdminApiClientsPage: React.FC = () => {
                           <IconButton aria-label="Editar" onClick={() => handleOpenEditModal(client)} icon={<PencilSquareIcon className="h-5 w-5"/>} variant="ghost" className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
                           
                           {/* BOTÓN 3: REGENERAR KEY (el que ya tenías) */}
-                          <IconButton aria-label="Regenerar API Key" onClick={() => handleRegenerateKey(client)} icon={<KeyIcon className="h-5 w-5"/>} variant="ghost" className="text-yellow-500 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
+                          <IconButton aria-label="Regenerar Cliente ID" onClick={() => handleRegenerateKey(client)} icon={<KeyIcon className="h-5 w-5"/>} variant="ghost" className="text-yellow-500 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>
                           
                           {/* BOTÓN 4: ELIMINAR (el que ya tenías) */}
                           <IconButton aria-label="Eliminar" onClick={() => handleOpenDeleteModal(client)} icon={<TrashIcon className="h-5 w-5"/>} variant="ghost" className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" disabled={isLoadingSomeMutation && selectedApiClientForOps?.id === client.id}/>

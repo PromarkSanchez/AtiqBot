@@ -18,9 +18,6 @@ const TypingIndicator = () => (<div className="flex items-center space-x-1.5 p-3
 const getInitials = (name: string): string => { if (!name) return 'B'; return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(); };
 function isColorLight(hexColor: string): boolean { if (!hexColor || hexColor.length < 4) return true; const color = hexColor.charAt(0) === '#' ? hexColor.substring(1, 7) : hexColor; if (color.length < 6) return true; const r = parseInt(color.substring(0, 2), 16), g = parseInt(color.substring(2, 4), 16), b = parseInt(color.substring(4, 6), 16); return ((r * 299) + (g * 587) + (b * 114)) / 1000 > 150; }
 
-// =============================
-// --- Componente Principal ---
-// =============================
 const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applicationId }) => {
   const { botName, botDescription, composerPlaceholder, showBetaBadge, footerEnabled, footerText, footerLink, theme, initialState, initialStateText, avatarImageUrl, floatingButtonImageUrl, themeMode } = config;
   const initials = getInitials(botName);
@@ -32,41 +29,77 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applica
   const [sessionId] = useState(`session_${Date.now()}`);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const handleOpenChat = (force = false) => { if (!isChatOpen || force) { setIsChatOpen(true); if (messages.length === 0) { setIsTyping(true); mutate('__INICIAR_CHAT__'); } } };
-
-  useEffect(() => { const shouldBeOpen = initialState === 'open'; if (shouldBeOpen) { handleOpenChat(true); } else { setIsChatOpen(false); } }, [initialState]);
-  useEffect(() => { if (window.self !== window.top) { window.parent.postMessage({ type: 'ATIQTEC_CHAT_STATE_CHANGE', payload: { isOpen: isChatOpen } }, '*'); } }, [isChatOpen]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
-  
   const { mutate } = useMutation<any, Error, string>({
-    mutationFn: (messageText: string) => { if (!apiKey || !applicationId) return Promise.reject(new Error("Falta API Key o Application ID.")); const body: ChatRequestBody = { session_id: sessionId, message: messageText, is_authenticated_user: false, user_name: "Usuario" }; return axiosInstance.post('/api/v1/chat/', body, { headers: { 'X-API-KEY': apiKey, 'X-Application-ID': applicationId } }); },
+    mutationFn: (messageText: string) => { if (!apiKey || !applicationId) return Promise.reject(new Error("Falta Client ID o Application ID.")); const body: ChatRequestBody = { session_id: sessionId, message: messageText, is_authenticated_user: false, user_name: "Usuario" }; return axiosInstance.post('/api/v1/chat/', body, { headers: { 'X-API-KEY': apiKey, 'X-Application-ID': applicationId } }); },
     onSuccess: (response) => setMessages((prev) => [...prev, { text: response.data.bot_response, isUser: false }]),
-    onError: (error: any) => setMessages((prev) => [...prev, { text: `**Error:** ${error?.response?.data?.detail || error.message}`, isUser: false }]),
+    onError: (error: any) => {
+        const errorText = error?.response?.data?.detail || error.message || "Error desconocido.";
+        // Prevenir mensajes de error duplicados si el usuario hace varios clics
+        if (messages.every(msg => !msg.text.includes(errorText))) {
+           setMessages((prev) => [...prev, { text: `**Error:** ${errorText}`, isUser: false }]);
+        }
+    },
     onSettled: () => setIsTyping(false),
   });
-
+  
   const handleSendMessage = (text: string) => { if (!text.trim() || isTyping) return; setMessages((prev) => [...prev, { text, isUser: true }]); setIsTyping(true); mutate(text); setInput(''); };
+
+  const handleOpenChat = () => {
+    if (isChatOpen) return;
+    
+    if (apiKey) {
+        setIsChatOpen(true);
+        if (messages.length === 0) {
+            setIsTyping(true);
+            mutate('__INICIAR_CHAT__');
+        }
+    } else {
+        setIsChatOpen(true);
+        setMessages([{ text: '**Error:** Introduce un Client ID válido para activar la vista previa.', isUser: false }]);
+    }
+  };
+
+  // ---> INICIO DE LA ÚNICA MODIFICACIÓN <---
+
+  // Este useEffect maneja la VISIBILIDAD inicial del chat según la configuración
+  useEffect(() => {
+    setIsChatOpen(initialState === 'open');
+  }, [initialState]);
+
+  // Este useEffect maneja la INICIALIZACIÓN de la conversación.
+  // Es la clave para el comportamiento de "auto-inicio"
+  useEffect(() => {
+    // Si la API key cambia (ej, de null a un valor) Y el chat está o debe estar abierto...
+    if (apiKey && isChatOpen) {
+      // Y si aún no hay mensajes (significa que es la primera vez que tenemos una clave válida)...
+      if (messages.length === 0 || (messages.length === 1 && messages[0].text.startsWith('**Error:**'))) {
+          // Limpiamos los posibles mensajes de error y comenzamos.
+          setMessages([]);
+          setIsTyping(true);
+          mutate('__INICIAR_CHAT__');
+      }
+    } 
+    // Si la clave se borra (pasa a ser null), limpiamos el chat
+    else if (!apiKey) {
+      setMessages([]);
+    }
+  }, [apiKey, isChatOpen]); // Depende de la clave Y de si la ventana está abierta
+
+  // ---> FIN DE LA MODIFICACIÓN <---
+  
+  useEffect(() => { if (window.self !== window.top) { window.parent.postMessage({ type: 'ATIQTEC_CHAT_STATE_CHANGE', payload: { isOpen: isChatOpen } }, '*'); } }, [isChatOpen]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
   
   const systemTheme = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', []);
   const activeTheme = themeMode === 'system' ? systemTheme : themeMode;
 
   const Avatar = ({ size }: { size: 'large' | 'small' }) => ( <div className={`rounded-full flex-shrink-0 flex items-center justify-center font-bold ${size === 'large' ? 'w-10 h-10 text-lg' : 'w-6 h-6 text-xs'}`}>{avatarImageUrl ? <img src={avatarImageUrl} alt="Bot Avatar" className="w-full h-full rounded-full object-cover" /> : <div className="w-full h-full rounded-full flex items-center justify-center" style={{ backgroundColor: theme.avatarBackgroundColor, color: isColorLight(theme.avatarBackgroundColor) ? '#000' : '#FFF' }}>{initials}</div>}</div> );
   
- const containerClasses = [
-    'w-full', 'h-full', 'font-sans', 'bg-transparent',
-    // Si el modo es 'dark', añade la clase 'dark'.
-    // Si el modo es 'light', añade la clase 'light' para forzarlo y evitar herencia.
-    // Si es 'system', no añadimos nada, dejando que la media query de CSS actúe.
-    activeTheme === 'dark' ? 'dark' : '',
-    activeTheme === 'light' ? 'light' : '' 
-  ].join(' ');
+  const containerClasses = `w-full h-full font-sans bg-transparent ${activeTheme === 'dark' ? 'dark' : ''} ${activeTheme === 'light' ? 'light' : ''}`.trim();
 
   return (
     <div className={containerClasses} >
       <div className="relative w-full h-full">
-
-        {/* --- VENTANA DEL CHAT --- */}
-        {/* Siempre ocupa todo el espacio. Su visibilidad se controla con opacidad y punteros. */}
         <div className={`w-full h-full transition-all duration-300 ease-in-out origin-bottom-right ${isChatOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'}`}>
           <div className="w-full h-full bg-white dark:bg-slate-800 rounded-xl shadow-lg flex flex-col font-sans overflow-hidden">
             <header className="flex items-center p-3 text-white shadow-md relative" style={{ backgroundColor: theme.primaryColor }}>
@@ -85,9 +118,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applica
             </footer>
           </div>
         </div>
-
-        {/* --- BOTÓN FLOTANTE --- */}
-        {/* Posicionado en la esquina de su contenedor padre. */}
         <div className={`absolute bottom-0 right-0 transition-all duration-300 ease-in-out origin-bottom-right ${!isChatOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'}`}>
           <div className="flex flex-col items-end">
             {initialStateText && <div className="mb-2 p-2 px-3 rounded-lg text-center text-sm shadow-md text-white" style={{ backgroundColor: theme.primaryColor }}>{initialStateText}</div>}
@@ -96,7 +126,6 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applica
             </button>
           </div>
         </div>
-        
       </div>
     </div>
   );
