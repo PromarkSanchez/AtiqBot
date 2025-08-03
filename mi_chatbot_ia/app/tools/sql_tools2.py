@@ -20,7 +20,7 @@ from app.models.db_connection_config import DatabaseConnectionConfig
 from app.utils.security_utils import decrypt_data
 
 # (Asegúrate de tener un get_sync_vector_store en tu app_state)
-from app.core.app_state import get_sync_vector_store
+from app.core.app_state2 import get_sync_vector_store
 from sqlalchemy.sql import text
 from sqlalchemy.sql.expression import TextClause
 from app.schemas.schemas import ParamTransformType

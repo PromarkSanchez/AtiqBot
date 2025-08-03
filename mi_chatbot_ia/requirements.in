@@ -30,6 +30,8 @@ langchain-google-genai
 langchain-text-splitters
 langsmith
 pydantic-settings
+pydantic[email]
+pydantic
 python-dotenv
 sentence-transformers # <<< Dejamos que pip elija la versión compatible
 requests
@@ -39,3 +41,17 @@ pyotp
 unstructured
 pypdf
 python-docx
+docx2txt
+# Framework
+fastapi
+
+# Caché (la línea que acabas de añadir)
+fastapi-cache2[redis]  # O sin [redis] si no usas Redis para el caché
+
+# Base de datos
+sqlalchemy
+psycopg2-binary
+
+# Utilidades
+uvicorn[standard]
+python-dotenv
