@@ -610,6 +610,8 @@ class ApiClientResponse(ApiClientBase, OrmBaseModel):
     id: int; created_at: datetime.datetime; updated_at: datetime.datetime
     allowed_contexts_details: List[ContextDefinitionBriefForApiClient] = Field(default_factory=list)
     webchat_ui_config: Optional[WebchatUIConfig] = None 
+    is_premium: bool
+
 
 
 class ApiClientWithPlainKeyResponse(ApiClientResponse):

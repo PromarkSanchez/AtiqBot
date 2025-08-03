@@ -25,5 +25,6 @@ export interface ApiClientWithPlainKeyResponse {
   updated_at: string;
   allowed_contexts_details?: ContextDefinitionBriefForApiClient[];
   webchat_ui_config?: ApiClientWithPlainKeyResponseWebchatUiConfig;
+  is_premium: boolean;
   api_key_plain?: ApiClientWithPlainKeyResponseApiKeyPlain;
 }
