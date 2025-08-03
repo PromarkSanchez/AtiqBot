@@ -9,11 +9,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['admin-ia.cayetano.pe'],
+    allowedHosts: ['admin-ia.cayetano.pe','localhost'],
     // cors: true  <-- Opcional, pero bueno tenerlo para desarrollo
   },
   preview: {
-    port: 4173,
+    port: 5173,
     host: true
   },
   build: {

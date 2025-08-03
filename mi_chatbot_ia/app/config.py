@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     SYNC_DATABASE_VECTOR_URL: str
     # +++++++++++++ NUEVAS LÍNEAS PARA AÑADIR +++++++++++++
     # --- Configuración General de la Aplicación y CORS ---
-    ENVIRONMENT: str = "development" # Puede ser "development" o "production"
+    ENVIRONMENT: str = "production" # Puede ser "development" o "production"
     
     # Los orígenes permitidos para conectarse a tu API.
     ALLOWED_ORIGINS: List[str] = [
@@ -30,11 +30,11 @@ class Settings(BaseSettings):
         "https://admin-ia-back.cayetano.pe", "https://cayetano.pe",
         "http://172.17.100.75",
         "http://127.0.0.1:5500",
-        "http://localhost:5173/widget.js",
         "http://localhost:4173",
         "http://127.0.0.1:5500",
-        "https://atiqtec.com",
-        "https://tz367z3l-4173.brs.devtunnels.ms"
+        "https://atiqtec.com"
+       
+      
     ]
 
     # ==========================================================
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # ==========================================================
     # URL de conexión a Redis. Se puede sobreescribir con una variable de entorno.
     # REDIS_URL: str = "redis://localhost:6379"
-    REDIS_URL : str ="redis://172.31.17.92:6379"
+    REDIS_URL : str ="redis://localhost:6379"
 
     # Tiempo de expiración para las entradas del caché en segundos (1 hora por defecto).
     CACHE_EXPIRATION_SECONDS: int = 3600
