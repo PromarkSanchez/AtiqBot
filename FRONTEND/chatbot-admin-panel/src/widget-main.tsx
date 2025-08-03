@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
 
 const WidgetApp: React.FC = () => {
   const urlParams = new URLSearchParams(window.location.search);
-  const apiKey = urlParams.get('apiKey');
+  const clientId = urlParams.get('clientId');
   const appId = urlParams.get('appId');
 
   // ---> ¡NUEVO CÓDIGO! <---
@@ -33,18 +33,18 @@ const WidgetApp: React.FC = () => {
 
   
   const { data: config, isLoading, isError, error } = useQuery<WebchatUIConfig>({
-      queryKey: ['webchatConfig', apiKey],
+      queryKey: ['webchatConfig', clientId],
       queryFn: async () => {
-          if (!apiKey) throw new Error('Falta API Key');
+          if (!clientId) throw new Error('Falta API Key');
           const response = await publicAxios.get('/api/v1/public/webchat-config', {
-              headers: { 'X-API-KEY': apiKey },
+              headers: { 'X-API-KEY': clientId},
           });
           return response.data;
       },
-      enabled: !!apiKey,
+      enabled: !!clientId,
   });
 
-  if (!apiKey || !appId) return null;
+  if (!clientId || !appId) return null;
   if (isLoading) return null;
   if (isError || !config) {
     console.error("AtiqTec Chatbot: Error al cargar configuración.", error);
@@ -54,7 +54,7 @@ const WidgetApp: React.FC = () => {
   return (
     <ChatbotPreview
         config={config}
-        apiKey={apiKey}
+        apiKey ={clientId}
         applicationId={appId}
     />
   );
