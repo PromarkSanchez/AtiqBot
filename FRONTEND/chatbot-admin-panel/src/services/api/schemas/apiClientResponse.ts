@@ -24,4 +24,5 @@ export interface ApiClientResponse {
   updated_at: string;
   allowed_contexts_details?: ContextDefinitionBriefForApiClient[];
   webchat_ui_config?: ApiClientResponseWebchatUiConfig;
+  is_premium: boolean;
 }

@@ -87,6 +87,8 @@ const AdminWebchatCustomizerPage: React.FC = () => {
   const switchKnobUnchecked = "translate-x-0";
   const sectionTitleClass = "text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-slate-700 pb-3 mb-4";
   const btnPrimaryClass = "inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed";
+  // Ensure the type includes is_premium or use a type assertion
+  const isPremiumUser = apiClientData?.is_premium ?? false;
 
   return (
     <div className="p-4 md:p-6 flex-grow">
@@ -147,8 +149,49 @@ const AdminWebchatCustomizerPage: React.FC = () => {
             </div>
           </div>
         </div>
+         {/* --- SECCIÓN DEL FOOTER MODIFICADA --- */}
+            <div className={`${!isPremiumUser ? 'opacity-60' : ''}`}>
+              <h3 className={sectionTitleClass}>Footer</h3>
+              <div className={`p-4 mt-4 border rounded-md space-y-4 ${!isPremiumUser ? 'border-dashed dark:border-slate-600' : 'dark:border-slate-700'}`}>
+                
+                {/* Switch de Activar/Desactivar */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium dark:text-gray-300">Activar "Powered By"</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setConfig(c => c ? {...c, footerEnabled: !c.footerEnabled} : null)} 
+                    disabled={!isPremiumUser}
+                    className={`${switchBase} ${config.footerEnabled ? switchChecked : switchUnchecked} ${!isPremiumUser ? 'cursor-not-allowed' : ''}`}
+                  >
+                    <span className={`${switchKnobBase} ${config.footerEnabled ? switchKnobChecked : switchKnobUnchecked}`} />
+                  </button>
+                </div>
+                
+                {/* Inputs de Texto y Enlace */}
+                <div className={`space-y-4 ${!config.footerEnabled || !isPremiumUser ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div>
+                      <label htmlFor="footerText" className={labelClass}>Texto del Footer</label>
+                      <input id="footerText" name="footerText" value={config.footerText || ''} onChange={handleConfigChange} className={inputClass} disabled={!isPremiumUser} />
+                    </div>
+                    <div>
+                      <label htmlFor="footerLink" className={labelClass}>Enlace del Footer</label>
+                      <input id="footerLink" name="footerLink" value={config.footerLink || ''} onChange={handleConfigChange} className={inputClass} disabled={!isPremiumUser} />
+                    </div>
+                </div>
+
+                {/* Mensaje de Premium */}
+                {!isPremiumUser && (
+                  <p className="mt-2 text-xs text-center text-indigo-500 dark:text-indigo-400 font-semibold">
+                    ✨ Opción personalizable en el plan Premium
+                  </p>
+                )}
+
+              </div>
+            </div>
+
+        </div>
       </div>
-    </div>
+     
   );
 };
 
