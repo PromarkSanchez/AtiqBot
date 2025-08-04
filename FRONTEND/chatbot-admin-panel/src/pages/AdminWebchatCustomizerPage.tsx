@@ -12,6 +12,7 @@ import {
   useUpdateWebchatUiConfigEndpointApiV1AdminApiClientsApiClientIdWebchatUiConfigPut as useUpdateWebchatUiConfig,
 } from '../services/api/endpoints';
 
+
 const initialConfig: WebchatUIConfig = {
   botName: 'Asistente Virtual',
   botDescription: 'Pregúntame lo que necesites',
@@ -22,8 +23,8 @@ const initialConfig: WebchatUIConfig = {
   footerLink: 'https://atiqtec.com',
   initialState: 'closed',
   initialStateText: '¡Hola! ¿Necesitas ayuda?',
-  avatarImageUrl: null,
-  floatingButtonImageUrl: null,
+  avatarImageUrl: '/logoUpch.jpg',
+  floatingButtonImageUrl: '/logoUpch.jpg',
   themeMode: 'system',
   theme: {
     primaryColor: '#2a4dac',
