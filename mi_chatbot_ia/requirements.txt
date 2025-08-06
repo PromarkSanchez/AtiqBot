@@ -9,12 +9,9 @@ aiofiles==24.1.0
 aiohappyeyeballs==2.6.1
     # via aiohttp
 aiohttp==3.12.14
-<<<<<<< HEAD
     # via
     #   langchain
     #   langchain-community
-=======
->>>>>>> f8a3034a4667313c3c67efbed9758e11660c1414
 aiosignal==1.4.0
     # via aiohttp
 alembic==1.16.4
@@ -89,15 +86,11 @@ email-validator==2.2.0
 emoji==2.14.1
     # via unstructured
 fastapi==0.116.1
-<<<<<<< HEAD
     # via
     #   -r requirements.in
     #   fastapi-cache2
 fastapi-cache2[redis]==0.2.2
     # via -r requirements.in
-=======
-fastapi-cache2==0.2.2
->>>>>>> f8a3034a4667313c3c67efbed9758e11660c1414
 filelock==3.18.0
     # via
     #   huggingface-hub
@@ -275,7 +268,6 @@ openai==1.97.1
 orjson==3.11.1
     # via langsmith
 packaging==23.2
-<<<<<<< HEAD
     # via
     #   huggingface-hub
     #   langchain-core
@@ -285,10 +277,6 @@ passlib[bcrypt]==1.7.4
     # via -r requirements.in
 pendulum==3.1.0
     # via fastapi-cache2
-=======
-passlib==1.7.4
-pendulum==3.1.0
->>>>>>> f8a3034a4667313c3c67efbed9758e11660c1414
 pgvector==0.2.5
     # via langchain-postgres
 pillow==11.3.0
@@ -384,7 +372,6 @@ pyyaml==6.0.2
     #   transformers
     #   uvicorn
 qrcode==8.2
-<<<<<<< HEAD
     # via -r requirements.in
 rapidfuzz==3.13.0
     # via unstructured
@@ -392,10 +379,6 @@ redis==4.6.0
     # via
     #   -r requirements.in
     #   fastapi-cache2
-=======
-RapidFuzz==3.13.0
-redis==4.6.0
->>>>>>> f8a3034a4667313c3c67efbed9758e11660c1414
 regex==2024.11.6
     # via
     #   nltk
