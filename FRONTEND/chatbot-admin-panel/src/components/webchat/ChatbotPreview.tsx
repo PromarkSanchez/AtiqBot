@@ -68,23 +68,7 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applica
 
   // Este useEffect maneja la INICIALIZACIÓN de la conversación.
   // Es la clave para el comportamiento de "auto-inicio"
-  useEffect(() => {
-    // Si la API key cambia (ej, de null a un valor) Y el chat está o debe estar abierto...
-    if (apiKey && isChatOpen) {
-      // Y si aún no hay mensajes (significa que es la primera vez que tenemos una clave válida)...
-      if (messages.length === 0 || (messages.length === 1 && messages[0].text.startsWith('**Error:**'))) {
-          // Limpiamos los posibles mensajes de error y comenzamos.
-          setMessages([]);
-          setIsTyping(true);
-          mutate('__INICIAR_CHAT__');
-      }
-    } 
-    // Si la clave se borra (pasa a ser null), limpiamos el chat
-    else if (!apiKey) {
-      setMessages([]);
-    }
-  }, [apiKey, isChatOpen]); // Depende de la clave Y de si la ventana está abierta
-
+ 
   // ---> FIN DE LA MODIFICACIÓN <---
   
   useEffect(() => { if (window.self !== window.top) { window.parent.postMessage({ type: 'ATIQTEC_CHAT_STATE_CHANGE', payload: { isOpen: isChatOpen } }, '*'); } }, [isChatOpen]);
