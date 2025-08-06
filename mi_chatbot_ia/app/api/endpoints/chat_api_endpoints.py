@@ -17,7 +17,7 @@ from redis.asyncio import Redis as AsyncRedis
 
 # === LangChain Imports ===
 from langchain_core.messages import HumanMessage, AIMessage, get_buffer_string
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate, MessagesPlaceholder # <-- ASEGURAR ESTA LÍNEA
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.documents import Document as LangchainCoreDocument
@@ -76,6 +76,10 @@ def _get_tool_params_key(session_id: str) -> str:
     """Devuelve la clave estandarizada para los PARÁMETROS PARCIALES de la herramienta."""
     return f"conv:params:{session_id}"
 
+def _get_user_name_key(session_id: str) -> str:
+    """Devuelve la clave para el nombre de usuario de la sesión."""
+    return f"conv:username:{session_id}"
+
 async def get_conversation_state_async(redis_client: Optional[AsyncRedis], session_id: str) -> Dict[str, Any]:
     """Recupera el estado completo de la conversación de forma asíncrona."""
     if not redis_client:
@@ -83,15 +87,18 @@ async def get_conversation_state_async(redis_client: Optional[AsyncRedis], sessi
         
     state_key = _get_conversation_state_key(session_id)
     params_key = _get_tool_params_key(session_id)
-    
-    state, params = await asyncio.gather(
+    username_key = _get_user_name_key(session_id)
+
+    state, params, username  = await asyncio.gather(
         cache_service.get_generic_cache_async(redis_client, state_key),
-        cache_service.get_generic_cache_async(redis_client, params_key)
+        cache_service.get_generic_cache_async(redis_client, params_key),
+        cache_service.get_generic_cache_async(redis_client, username_key)
     )
     
     return {
         "state_name": state if isinstance(state, str) else None,
-        "partial_parameters": params if isinstance(params, dict) else {}
+        "partial_parameters": params if isinstance(params, dict) else {},
+        "user_name": username if isinstance(username, str) else None
     }
 
 async def save_conversation_state_async(
@@ -101,21 +108,37 @@ async def save_conversation_state_async(
     partial_params: Optional[Dict[str, Any]], 
     ttl_seconds: int = 300
 ):
-    """(ASÍNCRONO) Guarda o limpia el estado de la conversación en Redis."""
+    """Guarda el estado. Ahora también maneja el 'user_name' si viene en partial_params."""
     if not redis_client: return
         
     state_key = _get_conversation_state_key(session_id)
     params_key = _get_tool_params_key(session_id)
+    username_key = _get_user_name_key(session_id)
 
+    # Preparamos los parámetros de herramienta sin el nombre de usuario
+    tool_params_to_save = partial_params.copy() if partial_params else {}
+    user_name_to_save = tool_params_to_save.pop("user_name", None)
+
+    tasks = []
+    
+    # Manejar estado y parámetros de herramienta
     if state_name is None:
-        await asyncio.gather(
+        tasks.extend([
             cache_service.delete_generic_cache_async(redis_client, state_key),
             cache_service.delete_generic_cache_async(redis_client, params_key)
-        )
+        ])
     else:
-        tasks = [cache_service.set_generic_cache_async(redis_client, state_key, state_name, ttl_seconds=ttl_seconds)]
-        if partial_params:
-            tasks.append(cache_service.set_generic_cache_async(redis_client, params_key, partial_params, ttl_seconds=ttl_seconds))
+        tasks.append(cache_service.set_generic_cache_async(redis_client, state_key, state_name, ttl_seconds=ttl_seconds))
+        if tool_params_to_save: # Solo guardamos si hay algo que guardar
+            tasks.append(cache_service.set_generic_cache_async(redis_client, params_key, tool_params_to_save, ttl_seconds=ttl_seconds))
+        else:
+            tasks.append(cache_service.delete_generic_cache_async(redis_client, params_key))
+
+    # Manejar nombre de usuario por separado (con un TTL más largo quizás)
+    if user_name_to_save:
+        tasks.append(cache_service.set_generic_cache_async(redis_client, username_key, user_name_to_save, ttl_seconds=3600)) # Guardamos el nombre por 1 hora
+
+    if tasks:
         await asyncio.gather(*tasks)
 
 # --- GRUPO 4: AGENTES Y HANDLERS DE LÓGICA ---
@@ -126,8 +149,16 @@ async def master_router_agent(
     has_doc_capability: bool,
     llm: BaseChatModel
 ) -> str:
-    """Decide qué herramienta usar (RAG vs BD). Tu lógica original se mantiene."""
+    """
+    Decide qué herramienta usar: RAG, BD o Despedida.
+    """
     if not has_db_capability and not has_doc_capability: return "NO_CAPABILITY"
+
+    # Si solo tiene una capacidad, la decisión es directa, a menos que sea una despedida.
+    is_farewell_simple_check = any(word in question.lower() for word in ["gracias", "adiós", "chao", "hasta luego", "eso es todo"])
+    if is_farewell_simple_check:
+        return "FAREWELL_HANDLER"
+
     if has_db_capability and not has_doc_capability: return "DATABASE_TOOL"
     if has_doc_capability and not has_db_capability: return "DOCUMENT_RETRIEVER"
     
@@ -136,10 +167,9 @@ async def master_router_agent(
          "Eres un agente enrutador experto. Tu única tarea es seleccionar la herramienta más adecuada para responder la pregunta del usuario. "
          "Responde únicamente con el nombre de la herramienta elegida en formato JSON.\n\n"
          "Herramientas Disponibles:\n"
-         "1. `DOCUMENT_RETRIEVER`: Úsala para preguntas generales, conceptuales, o teóricas. "
-         "Ejemplos: '¿qué son las ecuaciones lineales?', 'explícame los logaritmos'.\n\n"
-         "2. `DATABASE_TOOL`: Úsala para preguntas que piden datos específicos y personales del usuario. "
-         "Ejemplos: 'quiero saber mis notas', '¿cuál es mi promedio?', 'dame mi horario'."),
+         "1. `DOCUMENT_RETRIEVER`: Úsala para preguntas generales, conceptuales o teóricas sobre los temas del curso. Ejemplos: '¿qué son las ecuaciones lineales?', 'explícame los logaritmos'.\n"
+         "2. `DATABASE_TOOL`: Úsala para preguntas que piden datos específicos y personales del usuario. Ejemplos: 'quiero saber mis notas', '¿cuál es mi promedio?', 'dame mi horario'.\n"
+         "3. `FAREWELL_HANDLER`: Úsala si el usuario se está despidiendo o agradeciendo para finalizar la conversación. Ejemplos: 'gracias', 'eso es todo por ahora', 'adiós'.\n"),
         ("human", "Pregunta del usuario: {question}\n\nRespuesta JSON (solo la clave 'tool_to_use'):"),
     ])
     
@@ -148,7 +178,7 @@ async def master_router_agent(
     try:
         response = await chain.ainvoke({"question": question})
         selected_tool = response.get("tool_to_use")
-        if selected_tool in ["DOCUMENT_RETRIEVER", "DATABASE_TOOL"]:
+        if selected_tool in ["DOCUMENT_RETRIEVER", "DATABASE_TOOL", "FAREWELL_HANDLER"]:
             print(f"MASTER_ROUTER: Herramienta seleccionada: {selected_tool}")
             return selected_tool
     except Exception as e:
@@ -169,12 +199,65 @@ async def handle_greeting(vap: VirtualAgentProfile, llm: BaseChatModel, req: Cha
         
     return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": next_state, "next_params": next_params}
 
+# En app/api/endpoints/chat_api_endpoints.py
+
 async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm: BaseChatModel) -> Dict[str, Any]:
-    """Maneja la confirmación del nombre. Tu lógica original se mantiene."""
+    """
+    Maneja la confirmación, extrae el nombre y lo devuelve para ser guardado.
+    """
     log = {"intent": "NAME_CONFIRMATION"}
-    chain = ChatPromptTemplate.from_template(vap.name_confirmation_prompt) | llm | StrOutputParser()
-    final_bot_response = await chain.ainvoke({"user_provided_name": question.strip()})
     
+    # Nuevo prompt para extraer el nombre de forma estructurada (más fiable)
+    extraction_prompt_template = (
+        "Eres un sistema de extracción de entidades. Analiza el siguiente texto proporcionado por un usuario "
+        "y extrae su nombre de pila. Responde ÚNICAMENTE con un objeto JSON con la clave 'extracted_name'.\n\n"
+        "Texto del usuario: \"{user_provided_name}\"\n"
+        "JSON:"
+    )
+    extraction_chain = (
+        ChatPromptTemplate.from_template(extraction_prompt_template) 
+        | llm 
+        | JsonOutputParser()
+    )
+    
+    try:
+        extraction_result = await extraction_chain.ainvoke({"user_provided_name": question.strip()})
+        extracted_name = extraction_result.get("extracted_name", "Usuario").strip().capitalize()
+    except Exception:
+        # Fallback simple si el JSON falla
+        match = re.search(r'\b(\w+)\b$', question.strip())
+        extracted_name = match.group(1).capitalize() if match else "Usuario"
+
+    # Usamos el nombre extraído para la respuesta
+    response_template = "¡Entendido, {user_name}! Ahora sí, ¿en qué puedo ayudarte?"
+    final_bot_response = response_template.format(user_name=extracted_name)
+
+    # Devolvemos el nombre extraído en los "parámetros del siguiente estado"
+    return {
+        "response": final_bot_response,
+        "metadata": {},
+        "log": log,
+        "next_state": None, # Limpiamos el estado AWAITING_NAME
+        "next_params": {"user_name": extracted_name} # <-- ¡ESTO ES LO NUEVO!
+    }
+
+# En app/api/endpoints/chat_api_endpoints.py
+
+async def handle_farewell(vap: VirtualAgentProfile, req: ChatRequest, llm: BaseChatModel) -> Dict[str, Any]:
+    """Maneja la despedida de forma controlada."""
+    log = {"intent": "FAREWELL"}
+    
+    # Podemos crear un prompt específico para la despedida en el VirtualAgentProfile a futuro.
+    # Por ahora, usamos una respuesta genérica y efectiva.
+    farewell_prompt_template = (
+        "Tu única tarea es generar una despedida corta y amable para el usuario {user_name}. "
+        "Agradécele por la conversación y anímale a volver si tiene más dudas. "
+        "Usa los emojis de la personalidad del agente si están definidos."
+    )
+    
+    chain = ChatPromptTemplate.from_template(farewell_prompt_template) | llm | StrOutputParser()
+    final_bot_response = await chain.ainvoke({"user_name": req.user_name or "Usuario"})
+        
     return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": None, "next_params": None}
 
 async def handle_tool_clarification(
@@ -252,11 +335,19 @@ async def handle_new_question(
         has_doc_capability=has_doc_capability,
         llm=llm
     )
-    
+
+
     # --- 3. Control de Acceso y Ejecución ---
     
+    # --- CASO NUEVO: Despedida ---
+    if selected_tool == "FAREWELL_HANDLER":
+        print("SECURITY_GATE: Intención de despedida detectada. Llamando a handle_farewell.")
+        # <<< LA CORRECCIÓN ES AÑADIR `req=req` A LA LLAMADA
+        return await handle_farewell(vap=vap, req=req, llm=llm)
+
+
     # --- CASO A: Intención es usar Base de Datos ---
-    if selected_tool == "DATABASE_TOOL":
+    elif  selected_tool == "DATABASE_TOOL":
         
         # Primero, la muralla de seguridad
         if not active_db_ctx:
@@ -300,27 +391,47 @@ async def handle_new_question(
             print("SECURITY_GATE: Denegado. No hay un contexto de Documentos activo.")
             return {"response": "Lo siento, no tengo acceso a los documentos necesarios en este momento.", "metadata": {}, "log": {"intent": "NO_CONTEXT_AVAILABLE"}, "next_state": None, "next_params": None}
 
-        # Ejecución de la cadena RAG (tu lógica original completa)
+        # Ejecución de la cadena RAG con el historial gestionado de forma nativa
         print("SECURITY_GATE: Permitido. Ejecutando DOCUMENT_RETRIEVER (RAG).")
+        
+        # Esta limpieza de mensajes específicos es una buena práctica, la conservamos
         clean_history_list = [msg for msg in history_list if not (isinstance(msg, AIMessage) and ("nota final del curso es" in msg.content or "son las siguientes:" in msg.content))]
 
+        # Prompt para volver la pregunta actual una pregunta independiente usando el historial
         condense_q_prompt = PromptTemplate.from_template(settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE)
-        answer_prompt = ChatPromptTemplate.from_template(vap.system_prompt)
+
+        # *** ¡EL CAMBIO MÁS IMPORTANTE! ***
+        # El prompt final se ensambla dinámicamente, tratando cada parte como un bloque.
+        # Esto evita la contaminación del historial y permite que el LLM lo entienda nativamente.
+        answer_prompt = ChatPromptTemplate.from_messages([
+            ("system", vap.system_prompt), # Tu prompt principal de la BD (ya modificado).
+            MessagesPlaceholder(variable_name="chat_history"), # Aquí LangChain insertará la lista de mensajes.
+            ("human", "{question}") # La pregunta final independiente del usuario.
+        ])
+        
         retriever = vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"context_name": active_doc_ctx.name}})
 
         def format_docs(docs: List[LangchainCoreDocument]):
             return "\n\n".join(d.page_content for d in docs)
 
-        standalone_question_chain = RunnablePassthrough.assign(chat_history=lambda x: get_buffer_string(clean_history_list)) | condense_q_prompt | llm | StrOutputParser()
+        # 1. Cadena para crear la pregunta independiente (mantiene la conversación fluida)
+        standalone_question_chain = RunnablePassthrough.assign(
+            chat_history=lambda x: get_buffer_string(clean_history_list)
+        ) | condense_q_prompt | llm | StrOutputParser()
         
-        retrieved_documents_chain = RunnablePassthrough.assign(standalone_question=standalone_question_chain).assign(context_docs=itemgetter("standalone_question") | retriever)
+        # 2. Cadena para recuperar documentos usando la pregunta independiente
+        retrieved_documents_chain = RunnablePassthrough.assign(
+            standalone_question=standalone_question_chain
+        ).assign(context_docs=itemgetter("standalone_question") | retriever)
         
+        # 3. Cadena final que une todo
+        # Nota cómo pasamos 'chat_history' como una lista y 'question' como el string independiente.
         final_rag_chain = (
             retrieved_documents_chain |
             RunnablePassthrough.assign(
-                user_name=lambda x: req.user_name or vap.default_user_role,
+                # Pasamos el historial como una LISTA de mensajes, no como un texto plano.
+                chat_history=lambda x: clean_history_list, 
                 question=itemgetter("standalone_question"),
-                chat_history=lambda x: get_buffer_string(history_list),
                 context=itemgetter("context_docs") | RunnableLambda(format_docs),
             ) |
             answer_prompt | llm | StrOutputParser()
@@ -332,10 +443,10 @@ async def handle_new_question(
         retrieved_data = await retrieved_documents_chain.ainvoke(chain_input)
         source_documents = retrieved_data.get("context_docs", [])
         
-        metadata = {"source_documents": [{"source": doc.metadata.get("source", "N/A"), "page": doc.metadata.get("page")} for doc in source_documents]}
+        metadata = {"source_documents": [{"source": doc.metadata.get("source", "N/A"), "page": doc.metadata.get("page_number", "N/A")} for doc in source_documents]} # Ajusta "page_number" si usas otro nombre
         log = {"intent": "RAG_DOCUMENTAL"}
         
-        return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": None, "next_params": None}
+        return {"response": final_bot_response, "metadata": metadata, "log": log, "next_state": None, "next_params": None}  
     
     # --- CASO C: Fallback ---
     else:
@@ -456,6 +567,10 @@ async def process_chat_message(
 
         # --- 2. RECUPERAR ESTADO Y DELEGAR AL ENRUTADOR ---
         conversation_state = await get_conversation_state_async(redis_client, s_id)
+        
+        if conversation_state.get("user_name"):
+            req.user_name = conversation_state["user_name"]
+            print(f"SESSION_LOGIC: Nombre '{req.user_name}' recuperado de Redis para la sesión {s_id}.")
 
         handler_result = await route_request(
             req=req, conversation_state=conversation_state, llm=llm, history_list=history_list,

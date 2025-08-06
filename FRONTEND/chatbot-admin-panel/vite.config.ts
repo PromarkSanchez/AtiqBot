@@ -13,7 +13,7 @@ export default defineConfig({
     // cors: true  <-- Opcional, pero bueno tenerlo para desarrollo
   },
   preview: {
-    port: 5173,
+    port: 4173,
     host: true
   },
   build: {
