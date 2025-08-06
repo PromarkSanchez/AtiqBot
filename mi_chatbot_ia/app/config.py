@@ -89,17 +89,19 @@ class Settings(BaseSettings):
 
 # Dentro de la clase Settings en app/config.py
 
-    DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE: str = (
-        "Tu tarea es reformular la Pregunta de Seguimiento para que sea una pregunta completa y autocontenida. Debes IGNORAR COMPLETAMENTE el Historial de Chat y concentrarte ÚNICA Y EXCLUSIVAMENTE en la última pregunta del usuario.\n"
-        "El historial es solo para contexto mínimo, no para mezclar temas.\n\n"
-        "REGLA DE ORO: Si la 'Pregunta de Seguimiento' introduce un TEMA NUEVO (como cambiar de 'logaritmos' a 'ecuaciones'), tu respuesta DEBE SER solo sobre ese TEMA NUEVO.\n\n"
-        "Historial del Chat (ignorar para reformular):\n"
-        "{chat_history}\n\n"
-        "Pregunta de Seguimiento (CONCÉNTRATE AQUÍ):\n"
-        "{question}\n\n"
-        "Pregunta Independiente Resultante:"
-    )
+    
 
+    DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE: str = (
+    "Dado el siguiente historial de conversación y una pregunta de seguimiento, "
+    "reformula la pregunta de seguimiento para que sea una pregunta independiente y concisa "
+    "que pueda ser entendida sin el historial del chat. NO respondas la pregunta, "
+    "solo reformúlala.\n\n"
+    "Historial del Chat:\n"
+    "{chat_history}\n\n"
+    "Pregunta de Seguimiento:\n"
+    "{question}\n\n"
+    "Pregunta Independiente:"
+)
 
     DEFAULT_RAG_DOCS_QA_TEMPLATE: str = (
         "Eres un Asistente Virtual. Usa el siguiente contexto para responder a la pregunta. "

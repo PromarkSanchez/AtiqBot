@@ -305,10 +305,24 @@ def process_document_source_content_sync( # Esta es la función síncrona princi
     print(f"    DOC_SRC_PROC: Se generaron {len(final_document_chunks)} chunks finales para '{doc_source.name}'. Añadiendo metadata...")
     
     # El bucle de metadatos no cambia.
+    
+    # ====== INICIO DE LA MODIFICACIÓN ======
+
+    # Este bucle ya existe, ¡solo tenemos que añadir una línea!
     for chunk_instance in final_document_chunks: 
         chunk_instance.metadata = chunk_instance.metadata or {}
-        chunk_instance.metadata.update({'context_id':context_def.id, 'context_name':str(context_def.name),'context_main_type':str(context_def.main_type.value)})
-    
+        
+        # LÍNEA ANTIGUA (la dejas como está):
+        chunk_instance.metadata.update({'context_id': context_def.id})
+        
+        # ¡¡¡AÑADE ESTAS DOS LÍNEAS NUEVAS!!!
+        chunk_instance.metadata['context_name'] = context_def.name
+        chunk_instance.metadata['context_main_type'] = context_def.main_type.value
+        
+    # ====== FIN DE LA MODIFICACIÓN ======
+
+
+
     try: 
         # Plan B: Ingesta manual por lotes para control y visibilidad
         total_chunks = len(final_document_chunks)
@@ -389,7 +403,20 @@ async def process_database_query_context(context_def: ContextDefinition, vector_
     final_schema_chunks_list = schema_doc_splitter.split_documents(final_schema_langchain_docs)
     if not final_schema_chunks_list:print("    DB_SCHEMA_CTX_PROC: No chunks de esquema.");return
     print(f"    DB_SCHEMA_CTX_PROC: Chunks de esquema: {len(final_schema_chunks_list)}. Añadiendo metadata...")
-    for chunk_to_ingest in final_schema_chunks_list: chunk_to_ingest.metadata.update({'context_id':context_def.id,'context_name':str(context_def.name),'context_main_type':str(context_def.main_type.value)})
+    # ====== INICIO DE LA MODIFICACIÓN ======
+
+    # Este bucle ya existe, solo añadimos las líneas.
+    for chunk_to_ingest in final_schema_chunks_list: 
+        # LÍNEA ANTIGUA (la dejas):
+        chunk_to_ingest.metadata.update({'context_id': context_def.id})
+        
+        # ¡¡¡AÑADE ESTAS DOS LÍNEAS NUEVAS!!!
+        chunk_to_ingest.metadata['context_name'] = context_def.name
+        chunk_to_ingest.metadata['context_main_type'] = context_def.main_type.value
+
+    # ====== FIN DE LA MODIFICACIÓN ======
+
+
     try:vector_store.add_documents(documents=final_schema_chunks_list);print(f"    DB_SCHEMA_CTX_PROC: Chunks de '{context_def.name}' INGESTADOS.")
     except Exception as e_db_schema_ingest:print(f"    ERROR DB_SCHEMA_CTX_PROC: Ingesta: {e_db_schema_ingest}");traceback.print_exc(limit=2)
 
