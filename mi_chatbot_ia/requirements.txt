@@ -162,3 +162,4 @@ wheel==0.45.1
 wrapt==1.17.2
 xlsxwriter==3.2.5
 yarl==1.20.1
+uvloop ; sys_platform != "win32"
