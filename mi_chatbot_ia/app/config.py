@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         "https://atiqtec.com",
         "https://chatbot.atiqtec.com",
         "https://proyecto1-weld.vercel.app",
-        "http://adminchat.atiqtec.com/"
+        "https://adminchat.atiqtec.com/"
 
     ]
 
