@@ -34,6 +34,13 @@ from app.config import settings # Asumo que tienes un config.py con un objeto `s
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(f"\nINFO:     [STARTUP] FastAPI App '{app.title}' v{app.version} iniciando...")
+    print("\n--- [DEBUG] Verificando variables de entorno LEÍDAS por Pydantic ---")
+    print(f"  [DEBUG] CRUD_URL: {settings.DATABASE_CRUD_URL}")
+    print(f"  [DEBUG] VECTOR_URL: {settings.DATABASE_VECTOR_URL}")
+    print(f"  [DEBUG] REDIS_URL: {settings.REDIS_URL}")
+    print(f"  [DEBUG] FERNET_KEY: {'Presente' if settings.FERNET_KEY else 'AUSENTE'}")
+    print(f"  [DEBUG] JWT_SECRET_KEY: {'Presente' if settings.JWT_SECRET_KEY else 'AUSENTE'}")
+    print("----------------------------------------------------------------------\n")
     try:
         # LLAMADA ASÍNCRONA: Inicializa y guarda el estado en la app
         app.state.app_state = await initialize_application()

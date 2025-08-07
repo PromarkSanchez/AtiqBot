@@ -122,7 +122,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
+class Settings(BaseSettings):
+    DATABASE_CRUD_URL: Optional[str] = None
+    DATABASE_VECTOR_URL: Optional[str] = None
+    SYNC_DATABASE_CRUD_URL: Optional[str] = None
+    SYNC_DATABASE_VECTOR_URL: Optional[str] = None
+    FERNET_KEY: Optional[str] = None
+    JWT_SECRET_KEY: Optional[str] = None
 
 
 if __name__ == "__main__":
