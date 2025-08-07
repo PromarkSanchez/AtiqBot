@@ -44,29 +44,12 @@ class AppState:
         # 2. Conexiones a BD ASÍNCRONAS y Redis (Creación y Verificación)
         print("      [2/4] Creando y verificando pools de conexión...")
         try:
-            # --- ¡CONFIGURACIÓN CONDICIONAL DE SSL! ---
-            connect_args_ssl = {} # Por defecto, sin argumentos extra
-            if settings.ENVIRONMENT == "production":
-                print("      -> Modo Producción detectado. Activando SSL para la base de datos.")
-                connect_args_ssl = {"ssl": True}
-            else:
-                print("      -> Modo Desarrollo detectado. Usando configuración de DB sin SSL forzado.")
-
-            # --- Motores y Sesiones (con SSL configurado dinámicamente) ---
-            self.async_crud_engine = create_async_engine(
-                settings.DATABASE_CRUD_URL,
-                pool_pre_ping=True,
-                connect_args=connect_args_ssl  # <--- CORRECCIÓN AQUÍ
-            )
+            self.async_crud_engine = create_async_engine(settings.DATABASE_CRUD_URL, pool_pre_ping=True)
             self.AsyncCrudSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=self.async_crud_engine)
+            
+            self.async_vector_engine = create_async_engine(settings.DATABASE_VECTOR_URL, pool_pre_ping=True)
 
-            self.async_vector_engine = create_async_engine(
-                settings.DATABASE_VECTOR_URL,
-                pool_pre_ping=True,
-                connect_args=connect_args_ssl  # <--- CORRECCIÓN AQUÍ
-            )
-
-            # --- El resto de la sección 2 se mantiene como estaba ---
+            # ... (el código de Redis se queda igual) ...
             if settings.REDIS_URL:
                 self.redis_client = AsyncRedis.from_url(settings.REDIS_URL, encoding="utf8", decode_responses=True)
                 await self.redis_client.ping() # Verificación asíncrona
@@ -77,14 +60,17 @@ class AppState:
                 FastAPICache.init(InMemoryBackend())
                 print("      -> ADVERTENCIA: No hay REDIS_URL. Usando caché en memoria.")
 
-            # --- Verificación de Conexión a DB (Operación de Red) ---
+            # --- Verificación de Conexión ---
+            print("      -> Verificando conexión a DB CRUD...")
             async with self.async_crud_engine.connect() as conn:
-                await conn.execute(text("SELECT 1")) # <--- CORRECCIÓN AQUÍ
+                await conn.execute(text("SELECT 1"))
             print("      -> Éxito: Conexión a DB CRUD verificada.")
 
+            print("      -> Verificando conexión a DB Vector...")
             async with self.async_vector_engine.connect() as conn:
-                await conn.execute(text("SELECT 1")) # <--- CORRECCIÓN AQUÍ
+                await conn.execute(text("SELECT 1"))
             print("      -> Éxito: Conexión a DB Vector verificada.")
+
 
         except Exception as e:
             traceback.print_exc()
