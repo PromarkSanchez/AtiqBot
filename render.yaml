@@ -2,25 +2,25 @@ services:
   - type: web
     name: mi-chatbot-backend
     runtime: python
-    plan: starter
-    region: ohio # <<< IMPORTANTE: Cámbialo si tu región es otra (ej: frankfurt)
+    plan: starter 
+    region: ohio
     
-    # --- Configuración de Build y Arranque ---
+  
     rootDir: mi_chatbot_ia
     build:
+    
       command: "pip install -r requirements.txt"
     startCommand: "gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app"
     
-    # --- Configuración de Entorno ---
+  
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.8 # <<< IMPORTANTE: Pon la versión de Python que usas localmente
+        value: 3.13.5
       - key: TZ
-        value: America/Lima # Tu zona horaria
-      # Conectamos las variables secretas que configuraremos en el Dashboard
-      - fromGroup: chatbot-secrets 
-    
-    # --- Comprobación de Estado ---
+        value: America/Lima
+      - fromGroup: chatbot-secrets
+
+  
     healthCheck:
       path: /
       initialDelaySeconds: 45
