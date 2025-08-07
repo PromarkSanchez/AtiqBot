@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, async_sessi
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langchain_core.language_models.chat_models import BaseChatModel
+from sqlalchemy import text # <<< ¡AÑADE ESTA IMPORTACIÓN!
 
 # --- Módulos Locales ---
 from app.config import settings
@@ -43,13 +44,29 @@ class AppState:
         # 2. Conexiones a BD ASÍNCRONAS y Redis (Creación y Verificación)
         print("      [2/4] Creando y verificando pools de conexión...")
         try:
-            # --- Motores y Sesiones (Operaciones Ligeras) ---
-            self.async_crud_engine = create_async_engine(settings.DATABASE_CRUD_URL, pool_pre_ping=True)
-            self.AsyncCrudSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=self.async_crud_engine)
-            
-            self.async_vector_engine = create_async_engine(settings.DATABASE_VECTOR_URL, pool_pre_ping=True)
+            # --- ¡CONFIGURACIÓN CONDICIONAL DE SSL! ---
+            connect_args_ssl = {} # Por defecto, sin argumentos extra
+            if settings.ENVIRONMENT == "production":
+                print("      -> Modo Producción detectado. Activando SSL para la base de datos.")
+                connect_args_ssl = {"ssl": True}
+            else:
+                print("      -> Modo Desarrollo detectado. Usando configuración de DB sin SSL forzado.")
 
-            # --- Conexión y Ping a Redis (Operación de Red) ---
+            # --- Motores y Sesiones (con SSL configurado dinámicamente) ---
+            self.async_crud_engine = create_async_engine(
+                settings.DATABASE_CRUD_URL,
+                pool_pre_ping=True,
+                connect_args=connect_args_ssl  # <--- CORRECCIÓN AQUÍ
+            )
+            self.AsyncCrudSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=self.async_crud_engine)
+
+            self.async_vector_engine = create_async_engine(
+                settings.DATABASE_VECTOR_URL,
+                pool_pre_ping=True,
+                connect_args=connect_args_ssl  # <--- CORRECCIÓN AQUÍ
+            )
+
+            # --- El resto de la sección 2 se mantiene como estaba ---
             if settings.REDIS_URL:
                 self.redis_client = AsyncRedis.from_url(settings.REDIS_URL, encoding="utf8", decode_responses=True)
                 await self.redis_client.ping() # Verificación asíncrona
@@ -62,11 +79,11 @@ class AppState:
 
             # --- Verificación de Conexión a DB (Operación de Red) ---
             async with self.async_crud_engine.connect() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1")) # <--- CORRECCIÓN AQUÍ
             print("      -> Éxito: Conexión a DB CRUD verificada.")
 
             async with self.async_vector_engine.connect() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1")) # <--- CORRECCIÓN AQUÍ
             print("      -> Éxito: Conexión a DB Vector verificada.")
 
         except Exception as e:
@@ -77,7 +94,7 @@ class AppState:
         print("      [3/4] Creando instancia de PGVector (modo perezoso)...")
         try:
             self.vector_store = PGVector(
-                connection_string=settings.SYNC_DATABASE_VECTOR_URL, # <--- NOTA: PGVector a menudo usa la síncrona para setup
+                connection=settings.SYNC_DATABASE_VECTOR_URL, # <--- NOTA: PGVector a menudo usa la síncrona para setup
                 embeddings=self.embedding_model,
                 collection_name=settings.PGVECTOR_CHAT_COLLECTION_NAME,
                 use_jsonb=True,

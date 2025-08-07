@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     SYNC_DATABASE_VECTOR_URL: str
     # +++++++++++++ NUEVAS LÍNEAS PARA AÑADIR +++++++++++++
     # --- Configuración General de la Aplicación y CORS ---
-    ENVIRONMENT: str = "production" # Puede ser "development" o "production"
+    ENVIRONMENT: str = "development" # Puede ser "development" o "production"
     
     # Los orígenes permitidos para conectarse a tu API.
     ALLOWED_ORIGINS: List[str] = [
@@ -35,8 +35,7 @@ class Settings(BaseSettings):
         "https://atiqtec.com",
         "https://chatbot.atiqtec.com",
         "https://proyecto1-weld.vercel.app"
-       
-      
+
     ]
 
     # ==========================================================
