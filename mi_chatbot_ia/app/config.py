@@ -34,7 +34,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5500",
         "https://atiqtec.com",
         "https://chatbot.atiqtec.com",
-        "https://proyecto1-weld.vercel.app"
+        "https://proyecto1-weld.vercel.app",
+        "http://adminchat.atiqtec.com/"
 
     ]
 
