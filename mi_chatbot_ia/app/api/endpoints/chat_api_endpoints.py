@@ -308,6 +308,7 @@ async def handle_tool_clarification(
 
 async def handle_new_question(
     req: ChatRequest, 
+    user_dni: Optional[str],
     llm: BaseChatModel, 
     history_list: List,
     active_contexts: List[ContextDefinition], 
@@ -453,7 +454,7 @@ async def handle_new_question(
         return {"response": "Lo siento, no estoy seguro de cómo ayudarte con eso. ¿Puedes intentarlo de otra manera?", "metadata": {}, "log": {"intent": "NO_CAPABILITY"}, "next_state": None, "next_params": None}# Función route_request VERIFICADA
 
 async def route_request(
-    req: ChatRequest, conversation_state: Dict, llm: BaseChatModel, history_list: List,
+    req: ChatRequest, user_dni: Optional[str], conversation_state: Dict, llm: BaseChatModel, history_list: List,
     active_contexts: List[ContextDefinition], all_allowed_contexts: List[ContextDefinition],
     vap: VirtualAgentProfile, db: AsyncSession, 
     redis_client: Optional[AsyncRedis], vector_store: PGVector, app_state: AppState
@@ -491,7 +492,7 @@ async def route_request(
     # === REGLA 4: Si nada de lo anterior coincide, es una pregunta nueva. AHORA SÍ, enrutamos. ===
     print("ROUTE_LOGIC: No hay estado de saludo. Enrutando como nueva pregunta.")
     return await handle_new_question(
-        req=req, llm=llm, history_list=history_list, active_contexts=active_contexts,
+        req=req, user_dni=user_dni, llm=llm, history_list=history_list, active_contexts=active_contexts,
         all_allowed_contexts=all_allowed_contexts, vap=vap, db=db, vector_store=vector_store,
         app_state=app_state, redis_client=redis_client
     )
@@ -573,12 +574,18 @@ async def process_chat_message(
             print(f"SESSION_LOGIC: Nombre '{req.user_name}' recuperado de Redis para la sesión {s_id}.")
 
         handler_result = await route_request(
-            req=req, conversation_state=conversation_state, llm=llm, history_list=history_list,
-            active_contexts=active_contexts, all_allowed_contexts=all_allowed_contexts,
+            req=req,
+            user_dni=req.user_dni, 
+            conversation_state=conversation_state, 
+            llm=llm, 
+            history_list=history_list,
+            active_contexts=active_contexts, 
+            all_allowed_contexts=all_allowed_contexts,
             vap=vap, 
             db=db,
             redis_client=redis_client, 
-            vector_store=vector_store, app_state=app_state
+            vector_store=vector_store, 
+            app_state=app_state
 
         )
         

@@ -39,18 +39,43 @@ TOOL_USAGE_PROMPT_TEMPLATE = (
 
 # Reemplaza la vieja versión con esta:
 ANSWER_GENERATION_PROMPT_TEMPLATE = (
-    "Eres un asistente experto y amigable. Tu tarea es analizar una pregunta del usuario {user_name} y los datos JSON de la base de datos para darle una respuesta útil.\n\n"
-    "Pregunta del Usuario: '{question}'\n"
-    "Datos de la Base de Datos:\n"
+    "Eres un asistente amigable llamado Hered-IA. Te diriges a {user_name}.\n"
+    "Has consultado la base de datos para responder a la pregunta del usuario y has obtenido el siguiente resultado en formato JSON.\n\n"
+    "**Pregunta Original del Usuario:**\n'{question}'\n\n"
+    "**Resultado de la Base de Datos (JSON):**\n"
     "```json\n{db_result_str}\n```\n\n"
-    "**Instrucciones:**\n"
-    "1.  Responde a la pregunta del usuario usando los datos.\n"
-    "2.  Si la pregunta es una simple consulta de notas, preséntalas de forma clara.\n"
-    "3.  Si la pregunta es un CÁLCULO SOBRE los datos (ej: '¿cuánto me falta para aprobar?', '¿cuál es mi promedio?'), realiza el cálculo si es posible y explica tu razonamiento.\n"
-    "4.  Si el JSON está vacío (`[]`), informa al usuario que no encontraste registros.\n"
-    "5.  Habla directamente al usuario en español."
+    "--- INSTRUCCIONES DE RESPUESTA ---\n"
+    "1. **SI EL RESULTADO JSON NO ESTÁ VACÍO (`[]`):**\n"
+    "   - Responde la pregunta del usuario de forma clara y directa, basándote en los datos del JSON.\n"
+    "   - Si son notas, preséntalas en un formato de lista o tabla simple.\n"
+    "   - Si el usuario pidió un cálculo (promedio, etc.), realiza la operación y muestra el resultado, explicando brevemente cómo lo obtuviste.\n"
+    "   - Usa tu personalidad amigable y emojis 🚀😊.\n\n"
+    "2. **SI EL RESULTADO JSON ESTÁ VACÍO (`[]` o `null`):**\n"
+    "   - **NO des consejos genéricos ni te inventes información.**\n"
+    "   - Informa a {user_name} de forma concisa que no se encontraron los datos específicos que solicitó (ej: 'No encontré tus notas para el curso de [nombre del curso]').\n"
+    "   - Sugiere una posible razón de forma amable, como: 'Es posible que aún no se hayan cargado las notas para ese curso o que haya un error en los datos. Te recomiendo verificarlo con la oficina académica.'.\n"
+    "   - Finaliza poniéndote a su disposición para otra consulta.\n"
+    "   - **Ejemplo de respuesta ideal para resultado vacío:** 'Hola, {user_name}. Consulté el sistema pero no pude encontrar tus notas para el curso solicitado. Sería bueno que lo verifiques con la secretaría académica. ¿Puedo ayudarte en algo más?'\n\n"
+    "Tu Respuesta Final:"
 )
 # app/tools/sql_tools.py (Parte 2: Funciones Auxiliares)
+def _apply_transformations(value: Any, transformations: List[Dict[str, Any]]) -> Any:
+    if not transformations:
+        return value
+    
+    new_value = str(value)
+    for transform in transformations:
+        t_type = transform.get("type", "").upper()
+        if t_type == "STRIP":
+            new_value = new_value.strip()
+        elif t_type == "UPPERCASE":
+            new_value = new_value.upper()
+        elif t_type == "LOWERCASE":
+            new_value = new_value.lower()
+        elif t_type == "REMOVE_DASHES":
+            new_value = new_value.replace("-", "")
+    return new_value
+
 
 def _create_async_db_engine(config: DatabaseConnectionConfig) -> AsyncEngine:
     try:
@@ -90,26 +115,59 @@ async def _step1_extract_from_question(
         return {}
 
 async def _step2_resolve_entities_and_transform(
-    params: Dict[str, Any], tool_config: Dict[str, Any], engine: AsyncEngine
+    params: Dict[str, Any], 
+    tool_config: Dict[str, Any], 
+    engine: AsyncEngine,
+    user_dni: Optional[str]
 ) -> Tuple[Dict[str, Any], List[str]]:
+    
     final_params, missing_questions = {}, []
+    
     for p_config in tool_config.get("parameters", []):
         p_name = p_config["name"]
-        value = params.get(p_name.lower()) # Buscamos en minúscula
+        value = params.get(p_name.lower())
+
+        if p_config.get("is_dni_param") and user_dni:
+            print(f"DNI_HANDLER: Parámetro '{p_name}' identificado como DNI. Usando '{user_dni}' del usuario.")
+            value = user_dni
 
         if value:
+            value = _apply_transformations(value, p_config.get("transformations", []))
+
             if p_config.get("entity_resolver"):
                 entity_type = p_config["entity_resolver"]["entity_type"]
-                query = text("SELECT codigo_oficial FROM acad.catalogo_entidades WHERE tipo_entidad = :type AND :term ILIKE ANY(nombres_alias) LIMIT 1")
+                
+                # --- ¡LA CONSULTA MEJORADA Y MÁS FLEXIBLE! ---
+                # Esta consulta ahora busca si el término del usuario contiene alguno de los alias.
+                # Ejemplo: Si el usuario dice "estudio medicina" y un alias es "medicina", ¡encontrará una coincidencia!
+                query_str = """
+                SELECT codigo_oficial FROM acad.catalogo_entidades
+                WHERE tipo_entidad = :type
+                AND (
+                    :term ILIKE ANY(nombres_alias) OR
+                    EXISTS (
+                        SELECT 1
+                        FROM unnest(nombres_alias) AS alias
+                        WHERE :term ILIKE '%' || alias || '%'
+                    )
+                )
+                LIMIT 1;
+                """
+                query = text(query_str)
+                # La búsqueda se hará contra el `tipo_entidad` en mayúsculas para consistencia
                 resolved_json = await execute_async_query(engine, query, {"type": entity_type.upper(), "term": str(value)})
+
                 try:
                     data = json.loads(resolved_json)
                     if data and "codigo_oficial" in data[0]:
                         original_value, value = value, data[0]["codigo_oficial"]
                         print(f"ENTITY_RESOLVER: Traducido '{original_value}' -> '{value}'")
-                except (json.JSONDecodeError, IndexError): pass
-            
-            value = _apply_transformations(value, p_config.get("transformations", []))
+                    else:
+                        # Si no encontramos una traducción, es mejor registrarlo como una advertencia
+                        print(f"ENTITY_RESOLVER_WARN: No se pudo resolver '{value}' para el tipo '{entity_type}'. Usando valor original.")
+                except (json.JSONDecodeError, IndexError):
+                    print(f"ENTITY_RESOLVER_WARN: Error de JSON o índice al resolver '{value}'. Usando valor original.")
+
             final_params[p_name] = value
 
         elif p_config.get("is_required", True):
@@ -121,20 +179,45 @@ async def _step2_resolve_entities_and_transform(
 
 
 async def _step3_execute_and_synthesize(
-    question: str, params: Dict[str, Any], tool_config: Dict[str, Any], 
-    engine: AsyncEngine, llm: BaseChatModel, user_name: Optional[str] # <-- Firma corregida
+    question: str, 
+    params: Dict[str, Any], 
+    tool_config: Dict[str, Any], 
+    engine: AsyncEngine, 
+    llm: BaseChatModel, 
+    user_name: Optional[str]
 ) -> Dict[str, Any]:
+    
     proc_name = tool_config.get('procedure_name')
-    query_str = f"SELECT * FROM {proc_name}({', '.join([f':{p}' for p in params.keys()])})"
-    db_result_json = await execute_async_query(engine, text(query_str), params)
+    
+    # --- ¡CAMBIO CLAVE! AHORA ORDENAMOS LOS PARÁMETROS ---
+    
+    # 1. Obtenemos el orden correcto desde la configuración de la herramienta
+    param_order = [p["name"] for p in tool_config.get("parameters", [])]
+    
+    # 2. Creamos una lista de los valores de los parámetros EN ESE ORDEN
+    # Usamos .get(p_name) para evitar errores si un param no se encontró (aunque no debería pasar aquí)
+    param_values = [params.get(p_name) for p_name in param_order]
+    
+    # 3. Creamos placeholders posicionales anónimos (ej: :param_1, :param_2)
+    positional_placeholders = [f':param_{i+1}' for i in range(len(param_order))]
+    
+    # 4. Construimos la consulta y el diccionario de valores para SQLAlchemy
+    query_str = f"SELECT * FROM {proc_name}({', '.join(positional_placeholders)})"
+    query_params = {f'param_{i+1}': val for i, val in enumerate(param_values)}
+    
+    print(f"SQL_EXEC: Llamando a '{proc_name}' con parámetros en orden: {param_order} y valores: {query_params}")
+    
+    db_result_json = await execute_async_query(engine, text(query_str), query_params)
     
     ans_chain = ChatPromptTemplate.from_template(ANSWER_GENERATION_PROMPT_TEMPLATE) | llm | StrOutputParser()
     final_answer = await ans_chain.ainvoke({
-        "question": question, "db_result_str": db_result_json, "user_name": user_name or "Usuario" # <-- Fallback ultra-genérico
+        "question": question, 
+        "db_result_str": db_result_json, 
+        "user_name": user_name or "Usuario"
     })
     
+    # En el metadata, seguimos mostrando los nombres lógicos para que sea legible
     return {"intent": "TOOL_EXECUTED", "final_answer": final_answer, "metadata": {"tool_used": tool_config.get("tool_name"), "procedure_called": proc_name, "parameters_used": params}}
-
 # En app/tools/sql_tools.py
 
 
@@ -142,7 +225,7 @@ async def run_db_query_chain(
     question: str, chat_history_str: str, db_conn_config: DatabaseConnectionConfig,
     processing_config: Dict[str, Any], llm: BaseChatModel, 
     user_dni: Optional[str] = None,
-    user_name: Optional[str] = None, # <-- Recibe el user_name
+    user_name: Optional[str] = None,
     partial_params_from_redis: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     
@@ -150,19 +233,39 @@ async def run_db_query_chain(
     tool_config = processing_config.get("tools", [{}])[0]
     if not tool_config: return {"intent": "TOOL_FAILED", "final_answer": "No hay herramientas de BD configuradas."}
     
-    # 1. Extracción de la pregunta actual.
-    newly_extracted_params = await _step1_extract_from_question(question, user_dni, chat_history_str, tool_config, llm)
-    current_params = (partial_params_from_redis or {}).copy()
-    current_params.update(newly_extracted_params)
+    # 1. Extraemos SOLO los parámetros de la pregunta actual
+    newly_extracted_params = await _step1_extract_from_question(
+        question, user_dni, chat_history_str, tool_config, llm
+    )
     
-    # 2. Traducción y Validación.
-    final_params, missing_questions = await _step2_resolve_entities_and_transform(current_params, tool_config, engine)
+    # 2. Combinamos inteligentemente los parámetros: los nuevos tienen prioridad
+    # sobre los guardados en Redis.
+    combined_params_before_transform = (partial_params_from_redis or {}).copy()
+    combined_params_before_transform.update(newly_extracted_params)
     
-    # 3. Decidir.
+    # --- ¡CAMBIO ESTRUCTURAL CLAVE! ---
+    # 3. AHORA aplicamos la resolución y transformación al CONJUNTO COMPLETO
+    # de parámetros combinados, no solo a los nuevos.
+    final_params, missing_questions = await _step2_resolve_entities_and_transform(
+        params=combined_params_before_transform, 
+        tool_config=tool_config, 
+        engine=engine, 
+        user_dni=user_dni
+    )
+    
+    # 4. Decidir el siguiente paso
     if missing_questions:
-        return {"intent": "CLARIFICATION_REQUIRED", "final_answer": missing_questions[0], "metadata": {"partial_parameters": final_params}}
+        final_params_to_save = {k: v for k, v in final_params.items() if v is not None and v != ""}
+        # Guardamos en Redis los parámetros YA PROCESADOS (transformados y resueltos) que tenemos
+        return {
+            "intent": "CLARIFICATION_REQUIRED",
+            "final_answer": missing_questions[0],
+            "metadata": {"partial_parameters": final_params_to_save}
+        }
     else:
-        # Se pasa el `user_name` al último paso. NO HAY FALLBACKS "hardcodeados" aquí.
-        return await _step3_execute_and_synthesize(question, final_params, tool_config, engine, llm, user_name)
+        # Al tener todos los parámetros, ejecutamos el final
+        return await _step3_execute_and_synthesize(
+            question, final_params, tool_config, engine, llm, user_name
+        )
 
 
