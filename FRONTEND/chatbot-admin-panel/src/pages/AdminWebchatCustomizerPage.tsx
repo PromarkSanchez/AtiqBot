@@ -57,7 +57,7 @@ const AdminWebchatCustomizerPage: React.FC = () => {
 
   const embedCode = `<!-- Pega este código antes de cerrar la etiqueta </body> -->
 <script 
-  src="https://admin-ia.cayetano.pe/embed.js" 
+  src="https://adminchat.atiqtec.com/embed.js" 
   data-client-id="REEMPLAZAR_CON_TU_CLIENT_ID_GENERADO"
   data-app-id="${apiClientData?.settings?.application_id || 'TU_APP_ID'}"
   defer>
