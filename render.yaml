@@ -2,25 +2,18 @@ services:
   - type: web
     name: mi-chatbot-backend
     runtime: python
-    plan: starter 
-    region: ohio # <-- Asegúrate que sea tu región
-    
-    # Esta sección debe estar indentada 2 espacios
+    plan: starter
+    region: ohio
     rootDir: mi_chatbot_ia
     build:
-      # 'command' está indentado 4 espacios en total (2 respecto a 'build')
       command: "pip install -r requirements.txt"
     startCommand: "gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app"
-    
-    # 'envVars' está al mismo nivel que 'rootDir', 'build', 'startCommand'
     envVars:
       - key: PYTHON_VERSION
-        value: 3.13.5 # <-- Asegúrate que sea tu versión
+        value: 3.13.5
       - key: TZ
         value: America/Lima
       - fromGroup: chatbot-secrets
-
-    # 'healthCheck' está al mismo nivel que los anteriores
     healthCheck:
       path: /
       initialDelaySeconds: 45
