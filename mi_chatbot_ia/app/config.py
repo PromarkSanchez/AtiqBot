@@ -25,16 +25,9 @@ class Settings(BaseSettings):
     # Los orígenes permitidos para conectarse a tu API.
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:8000", "http://localhost:5173",
-        "http://3.227.128.241:5173", "http://172.31.35.254:5173",
-        "https://upch-test.blackboard.com", "https://admin-ia.cayetano.pe",
-        "https://admin-ia-back.cayetano.pe", "https://cayetano.pe",
-        "http://172.17.100.75",
-        "http://127.0.0.1:5500",
-        "http://localhost:4173",
         "http://127.0.0.1:5500",
         "https://atiqtec.com",
         "https://chatbot.atiqtec.com",
-        "https://proyecto1-weld.vercel.app",
         "https://adminchat.atiqtec.com/"
 
     ]
