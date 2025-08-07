@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['admin-ia.cayetano.pe','chatbot.atiqtec.com'],
+    allowedHosts: ['chatbot.atiqtec.com','adminchat.atiqtec.com'],
     // cors: true  <-- Opcional, pero bueno tenerlo para desarrollo
   },
   preview: {
