@@ -20,16 +20,17 @@ class Settings(BaseSettings):
     SYNC_DATABASE_VECTOR_URL: str
     # +++++++++++++ NUEVAS LÍNEAS PARA AÑADIR +++++++++++++
     # --- Configuración General de la Aplicación y CORS ---
-    ENVIRONMENT: str = "development" # Puede ser "development" o "production"
+    ENVIRONMENT: str = "production" # Puede ser "development" o "production"
     
     # Los orígenes permitidos para conectarse a tu API.
 
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:8000", "http://localhost:5173",
         "http://127.0.0.1:5500",
-        "https://atiqtec.com",
         "https://chatbot.atiqtec.com",
         "https://adminchat.atiqtec.com/"
+        "https://atiqtec.com",
+        "https://adminchat.atiqtec.com"
 
     ]
 
