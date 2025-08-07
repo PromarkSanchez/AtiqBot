@@ -17,3 +17,16 @@ services:
     healthCheck:
       path: /
       initialDelaySeconds: 45
+
+postgresql+asyncpg://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a:5432/chatbot_db_auqx
+postgresql://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a/chatbot_db_auqx
+postgresql://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a.ohio-postgres.render.com/chatbot_db_auqx
+PGPASSWORD=zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR psql -h dpg-d2a8hg7diees738on6s0-a.ohio-postgres.render.com -U perseo chatbot_db_auqx
+
+dpg-d2a8hg7diees738on6s0-a
+perseo
+zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR
+
+
+
+postgresql://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a.ohio-postgres.render.com/chatbot_db_auqx
