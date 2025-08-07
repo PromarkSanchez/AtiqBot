@@ -2,3 +2,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@layer components {
+  /*
+    Creamos un "componente" de utilidad con @apply.
+    Esto agrupa todas las clases que necesitamos para hacer una tabla responsiva.
+  */
+  .table-responsive-wrapper {
+    @apply w-full overflow-x-auto align-middle inline-block;
+  }
+}

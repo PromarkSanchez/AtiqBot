@@ -126,8 +126,8 @@ const AdminRolesPage: React.FC = () => {
       {!isLoadingRoles && roles.length === 0 && <p className="text-center p-4">No se encontraron roles.</p>}
 
       {roles.length > 0 && (
-        <div className="shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg">
-          <div className="overflow-x-auto">
+        <div className="shadow-md border border-gray-200 dark:border-gray-700 rounded-lg">
+          <div className="table-responsive-wrapper">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
               <thead className="bg-gray-50 dark:bg-slate-900/70">
                 {/* === CABECERA CON ESTILOS CORREGIDOS === */}
