@@ -91,8 +91,33 @@ const ChatbotPreview: React.FC<ChatbotPreviewProps> = ({ config, apiKey, applica
               <div><div className="flex items-center"><h2 className="font-bold text-md">{botName}</h2>{showBetaBadge && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold uppercase bg-white/30 rounded-full">Beta</span>}</div>{botDescription && <p className="text-xs opacity-80">{botDescription}</p>}</div>
               <button onClick={() => setIsChatOpen(false)} aria-label="Cerrar chat" className="absolute top-1 right-1 p-2 rounded-full text-white/70 hover:text-white hover:bg-white/20"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </header>
-            <main className="flex-grow p-4 space-y-4 overflow-y-auto">{messages.map((msg, index) => (<div key={index} className={`flex items-start gap-3 ${msg.isUser ? 'justify-end' : ''}`}>{!msg.isUser && <div className="flex-shrink-0"><Avatar size="small" /></div>}<div className={`rounded-lg p-3 max-w-[85%] prose prose-sm dark:prose-invert max-w-none ${msg.isUser ? 'text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'}`} style={{ backgroundColor: msg.isUser ? theme.primaryColor : undefined }}><ReactMarkdown>{msg.text}</ReactMarkdown></div></div>))}{isTyping && (<div className="flex items-start gap-3"><div className="flex-shrink-0"><Avatar size="small" /></div><div className="bg-gray-200 dark:bg-slate-700 rounded-lg"><TypingIndicator /></div></div>)}<div ref={messagesEndRef} />
-            </main>
+                <main className="flex-grow p-4 space-y-4 overflow-y-auto">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex items-start gap-3 ${msg.isUser ? 'justify-end' : ''}`}>
+                            {!msg.isUser && <div className="flex-shrink-0"><Avatar size="small" /></div>}
+                            <div className={`rounded-lg p-3 max-w-[85%] prose prose-sm dark:prose-invert max-w-none ${msg.isUser ? 'text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'}`} style={{ backgroundColor: msg.isUser ? theme.primaryColor : undefined }}>
+                                
+                                
+                                <ReactMarkdown
+                                  components={{
+                                    a: ({node, ...props}) => 
+                                      <a 
+                                        {...props} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                      />
+                                  }}
+                                >
+                                  {msg.text}
+                                </ReactMarkdown>
+                                
+                                
+                            </div>
+                        </div>
+                    ))}
+                    {isTyping && (<div className="flex items-start gap-3"><div className="flex-shrink-0"><Avatar size="small" /></div><div className="bg-gray-200 dark:bg-slate-700 rounded-lg"><TypingIndicator /></div></div>)}
+                    <div ref={messagesEndRef} />
+                </main>
             <footer className="p-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
               <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(input); }} className="flex items-center bg-white dark:bg-slate-900 rounded-full border border-gray-300 dark:border-slate-600 px-4 py-1.5">
                 <input type="text" placeholder={composerPlaceholder || "Escribe tu mensaje..."} value={input} onChange={(e) => setInput(e.target.value)} disabled={isTyping} className="flex-grow bg-transparent focus:outline-none text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50" />
