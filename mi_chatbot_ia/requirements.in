@@ -1,28 +1,32 @@
-# === requirements.in ===
-# La lista de deseos de nuestro proyecto. Pip se encargará del resto.
+# requirements.in
+# Lista de dependencias del proyecto, limpia y sin duplicados.
 
-# Core del Backend
+# --- Servidor Web y Producción ---
 fastapi
-uvicorn[standard]
-sqlalchemy[asyncpg] # Importante mantener [asyncpg]
-alembic
-psycopg
-psycopg[binary]
-psycopg2-binary # Drivers para SQLAlchemy
-asyncpg # Driver para SQLAlchemy async
-redis
+uvicorn[standard]       # Servidor ASGI para desarrollo y pruebas.
+gunicorn                # Servidor de producción para despliegue en Render.
 
-# Autenticación y Seguridad
-python-multipart
-bcrypt==3.2.0
-passlib[bcrypt]
-python-jose[cryptography]
-ldap3
+# --- Base de Datos ---
+sqlalchemy[asyncpg]     # ORM. El extra [asyncpg] incluye el driver asíncrono.
+alembic                 # Para migraciones de base de datos.
+psycopg[binary]         # Driver principal y moderno para PostgreSQL.
+# psycopg2-binary       # Comentado: psycopg (v3) es el sucesor. Generalmente no necesitas ambos.
+                        # Descoméntalo solo si una librería vieja lo requiere explícitamente.
 
-# LANGCHAIN - Forzamos a la última generación estable
-langchain>=0.1.0,<0.2.0
+# --- Caché ---
+fastapi-cache2[redis]   # Sistema de caché para FastAPI, con backend de Redis.
+redis                   # Cliente de Python para Redis.
 
-# El resto de dependencias directas
+# --- Autenticación y Seguridad ---
+python-multipart        # Necesario para la subida de archivos y formularios en FastAPI.
+bcrypt==3.2.0           # Versión fijada por compatibilidad con passlib.
+passlib[bcrypt]         # Librería para hashing de contraseñas.
+python-jose[cryptography] # Para manejar tokens JWT.
+ldap3                   # Para autenticación con LDAP.
+pyotp                   # Para contraseñas de un solo uso (MFA/2FA).
+
+# --- Lógica de IA (LangChain y otros) ---
+langchain>=0.1.0,<0.2.0  # Core de LangChain, fijado a la versión 0.1.x.
 langchain-community
 langchain-aws
 langchain-postgres
@@ -30,29 +34,18 @@ langchain-openai
 langchain-google-genai
 langchain-text-splitters
 langsmith
-pydantic-settings
-pydantic[email]
-pydantic
-python-dotenv
-sentence-transformers # <<< Dejamos que pip elija la versión compatible
-requests
-# ... tus otras dependencias como qrcode, pyotp, etc.
-qrcode
-pyotp
-unstructured
+sentence-transformers   # Para generar embeddings.
+openai
+
+# --- Procesamiento de Documentos ---
+unstructured            # Para extraer texto de varios tipos de archivos.
 pypdf
 python-docx
 docx2txt
-# Framework
-fastapi
 
-# Caché (la línea que acabas de añadir)
-fastapi-cache2[redis]  # O sin [redis] si no usas Redis para el caché
-
-# Base de datos
-sqlalchemy
-psycopg2-binary
-
-# Utilidades
-uvicorn[standard]
-python-dotenv
+# --- Utilidades y Otros ---
+pydantic[email]         # Incluye validación de emails. No necesitas "pydantic" aparte.
+pydantic-settings
+python-dotenv           # Para cargar variables de entorno desde archivos .env.
+requests
+qrcode

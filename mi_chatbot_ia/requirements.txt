@@ -24,8 +24,6 @@ anyio==4.9.0
     #   openai
     #   starlette
     #   watchfiles
-asyncpg==0.30.0
-    # via -r requirements.in
 attrs==25.3.0
     # via aiohttp
 backoff==2.2.1
@@ -142,6 +140,8 @@ grpcio==1.74.0
     #   grpcio-status
 grpcio-status==1.62.3
     # via google-api-core
+gunicorn==23.0.0
+    # via -r requirements.in
 h11==0.16.0
     # via
     #   httpcore
@@ -268,11 +268,14 @@ numpy==1.26.4
 olefile==0.47
     # via python-oxmsg
 openai==1.97.1
-    # via langchain-openai
+    # via
+    #   -r requirements.in
+    #   langchain-openai
 orjson==3.11.1
     # via langsmith
 packaging==23.2
     # via
+    #   gunicorn
     #   huggingface-hub
     #   langchain-core
     #   marshmallow
@@ -311,8 +314,6 @@ psycopg-binary==3.2.9
     # via psycopg
 psycopg-pool==3.2.6
     # via langchain-postgres
-psycopg2-binary==2.9.10
-    # via -r requirements.in
 pyasn1==0.6.1
     # via
     #   ldap3
