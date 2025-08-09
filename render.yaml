@@ -2,7 +2,7 @@ version: "1"
 
 services:
   - type: web
-    name: mi-chatbot-backend
+    name: mi-chatbot-backend-v2
     runtime: docker
     repo: https://github.com/PromarkSanchez/proyecto1
     plan: standard
