@@ -2,7 +2,7 @@
 
 services:
 - type: web
-  name: mi-chatbot-backend-v2 # Mismo nombre que tenías
+  name: mi-chatbot-backend # Mismo nombre que tenías
   # --- CAMBIO #1: Cambiamos el runtime a Docker ---
   runtime: docker
   repo: https://github.com/PromarkSanchez/proyecto1
