@@ -1,13 +1,14 @@
 // src/components/admin/roles/RoleForm.tsx
 import React, { useEffect, useState } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
-import type { RoleUpdate, RoleResponse } from '../../../services/api/schemas';
+import type { RoleUpdate, RoleResponse, RoleCreate } from '../../../services/api/schemas';
 
 // --- NUEVOS Hooks para obtener menús ---
 import { 
     useGetAllMenuItemsApiV1AdminMenusGet,
     useGetMenusForRoleApiV1AdminRolesRoleIdMenusGet
 } from '../../../services/api/endpoints';
+const PROTECTED_ROLES = ["SuperAdmin"];
 
 // --- NUEVO tipo para el formulario, incluyendo los permisos de menú ---
 type RoleFormValues = {
@@ -48,22 +49,20 @@ const RoleForm: React.FC<RoleFormProps> = ({
 
   // --- LÓGICA PARA PERMISOS DE MENÚ ---
 
-  // 1. Obtener TODOS los menús disponibles
+  const isProtectedRole = isEditMode && role ? PROTECTED_ROLES.includes(role.name) : false;
+
   const { data: allMenusData, isLoading: isLoadingAllMenus } = useGetAllMenuItemsApiV1AdminMenusGet(
       { limit: 1000 }, { query: { staleTime: 300000 } }
   );
   const allMenus = allMenusData || [];
 
-  // 2. Obtener los menús asignados a ESTE rol (si estamos editando)
   const roleId = isEditMode && role ? role.id : -1;
   const { data: assignedMenusData, isLoading: isLoadingAssignedMenus } = useGetMenusForRoleApiV1AdminRolesRoleIdMenusGet(
     roleId, { query: { enabled: isEditMode && roleId > 0 } }
   );
   
-  // Guardamos los IDs iniciales para comparar al hacer submit
   const [initialMenuIds, setInitialMenuIds] = useState<Set<number>>(new Set());
 
-  // Efecto para poblar el formulario
   useEffect(() => {
     if (isEditMode && role) {
       const assignedIds = assignedMenusData?.map(m => m.id) || [];
@@ -81,18 +80,35 @@ const RoleForm: React.FC<RoleFormProps> = ({
 
 
   const processSubmit: SubmitHandler<RoleFormValues> = (formData) => {
-    const rolePayload: RoleUpdate = {};
-    if (isDirty) {
-      // Solo incluimos los campos del rol si han cambiado
-      if (formData.name !== role?.name) rolePayload.name = formData.name;
-      if (formData.description !== (role?.description || '')) rolePayload.description = formData.description;
-    }
-
     const finalMenuIds = new Set(formData.menu_permissions);
     const added = Array.from(finalMenuIds).filter(id => !initialMenuIds.has(id));
     const removed = Array.from(initialMenuIds).filter(id => !finalMenuIds.has(id));
+    
+    // Si no estamos en modo edición, es una creación.
+    if (!isEditMode) {
+      const createPayload: RoleCreate = {
+        name: formData.name,
+        description: formData.description,
+      };
+      // No tiene sentido enviar `added` y `removed` para un rol nuevo, pero mantenemos la firma de la función.
+      onFormSubmit(createPayload, { added: [], removed: [] }); 
+      return;
+    }
 
-    onFormSubmit(rolePayload, { added, removed });
+    // <<< 3. Lógica ajustada para la actualización (modo edición).
+    const updatePayload: RoleUpdate = {};
+
+    // La descripción se puede actualizar siempre.
+    if (formData.description !== (role?.description || null)) { // Comparación estricta con null
+        updatePayload.description = formData.description;
+    }
+    
+    // El nombre SOLO se incluye si NO es un rol protegido y si ha cambiado.
+    if (!isProtectedRole && formData.name !== role?.name) {
+      updatePayload.name = formData.name;
+    }
+
+    onFormSubmit(updatePayload, { added, removed });
   };
   
   const isLoadingPermissions = isLoadingAllMenus || (isEditMode && isLoadingAssignedMenus);
@@ -109,10 +125,19 @@ const RoleForm: React.FC<RoleFormProps> = ({
             id="role_name"
             type="text"
             {...register('name', { required: 'El nombre del rol es obligatorio.' })}
+            // <<< 4. Deshabilitamos el input si el rol es protegido o se está enviando.
+            disabled={isProtectedRole || isSubmitting}
             className={`mt-1 block w-full px-3 py-2 border ${
               errors.name ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
-            } rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-900`}
+            } rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-900 
+            disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-slate-700`} // Clases para disabled
           />
+          {/* <<< 5. Mensaje de ayuda que aparece si el rol está protegido. */}
+          {isProtectedRole && (
+              <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                  El nombre de este rol no se puede cambiar.
+              </p>
+          )}
           {errors.name && (
             <p className="mt-1 text-xs text-red-500 dark:text-red-400">{errors.name.message}</p>
           )}

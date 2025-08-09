@@ -1,6 +1,7 @@
+pip install pip-tools
 pip-compile
 pip-sync
-0 pip install -r requirements.txt
+0 pip install -r requirements.txt py -m venv .venv 
 # 1. Activa el entorno virtual (ejemplo para CMD)
 .venv\Scripts\activate
  limpiar cache for /d /r . %d in (__pycache__) do @if exist "%d" rd /s /q "%d".

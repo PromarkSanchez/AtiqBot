@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:8000", "http://localhost:5173",
         "http://127.0.0.1:5500",
-        "https://chatbot.atiqtec.com",
+        "https://chatbot.atiqtec.com/",
         "https://adminchat.atiqtec.com/"
         "https://atiqtec.com/",
-        "https://adminchat.atiqtec.com"
+        "https://adminchat.atiqtec.com/"
 
     ]
 

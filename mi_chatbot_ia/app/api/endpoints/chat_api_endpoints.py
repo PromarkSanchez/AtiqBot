@@ -284,6 +284,7 @@ async def handle_tool_clarification(
         processing_config=target_context.processing_config or {},
         llm=llm,
         user_dni=req.user_dni, 
+        user_name=req.user_name,
         partial_params_from_redis=conversation_state.get("partial_parameters")
     )
     
@@ -368,6 +369,7 @@ async def handle_new_question(
             processing_config=active_db_ctx.processing_config or {},
             llm=llm, 
             user_dni=req.user_dni,
+            user_name=req.user_name,
             partial_params_from_redis=None  # <-- Clave: Es una pregunta nueva, no hay estado previo.
         )
         

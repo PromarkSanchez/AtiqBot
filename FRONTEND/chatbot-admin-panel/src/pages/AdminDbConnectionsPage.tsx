@@ -1,5 +1,7 @@
 // src/pages/AdminDbConnectionsPage.tsx
 import React, { useState, useCallback } from 'react';
+
+
 import {
   useReadAllDbConnectionsApiV1AdminDbConnectionsGet,
   useCreateNewDbConnectionApiV1AdminDbConnectionsPost,
@@ -27,6 +29,7 @@ const AdminDbConnectionsPage: React.FC = () => {
   const [selectedDbConnection, setSelectedDbConnection] = useState<DatabaseConnectionResponse | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
+
   const { data: dbConnectionsData, isLoading, error, refetch } = useReadAllDbConnectionsApiV1AdminDbConnectionsGet(
     { limit: 100 }, { query: { queryKey: ['adminDbConnectionsList'], staleTime: 60000 } }
   );
@@ -36,6 +39,7 @@ const AdminDbConnectionsPage: React.FC = () => {
     const message = (axiosError.response?.data as any)?.detail || defaultMessage;
     toast.error(message, { duration: 5000 });
   }, []);
+
 
   const createMutation = useCreateNewDbConnectionApiV1AdminDbConnectionsPost({
     mutation: {
@@ -62,7 +66,16 @@ const AdminDbConnectionsPage: React.FC = () => {
   const handleOpenCreateModal = () => { setIsEditMode(false); setSelectedDbConnection(null); setIsModalOpen(true); };
   const handleOpenEditModal = (conn: DatabaseConnectionResponse) => { setIsEditMode(true); setSelectedDbConnection(conn); setIsModalOpen(true); };
   const handleOpenDeleteModal = (conn: DatabaseConnectionResponse) => { setSelectedDbConnection(conn); setIsDeleteModalOpen(true); };
-  const handleCloseModals = () => { if (isMutating) return; setIsModalOpen(false); setIsDeleteModalOpen(false); setSelectedDbConnection(null); };
+
+
+  const handleCloseModals = () => {
+    // Simplemente cierra los modales, sin condiciones. 
+    // Los botones ya estarán deshabilitados por `isMutating` si es necesario.
+    setIsModalOpen(false); 
+    setIsDeleteModalOpen(false); 
+    setSelectedDbConnection(null); 
+  };
+  
   
   const handleFormSubmit = (formData: DatabaseConnectionCreate | DatabaseConnectionUpdate) => {
     if (isEditMode && selectedDbConnection) {

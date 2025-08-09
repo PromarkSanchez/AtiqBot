@@ -133,3 +133,62 @@ async def set_app_user_mfa_status(db: AsyncSession, db_user: AppUser, enabled: b
     await db.commit()
     await db.refresh(db_user)
     return db_user
+
+async def update_app_user_mfa_secret(db: AsyncSession, db_user: AppUser, mfa_secret_plain: str) -> AppUser:
+    if not settings.FERNET_KEY: # Es buena práctica chequear aquí también
+        print("ERROR CRUD (AppUser): FERNET_KEY no configurado al intentar encriptar MFA secret.")
+        raise ValueError("FERNET_KEY no está configurado.")
+    # Llamando a encrypt_data SIN la clave porque tu security_utils.py la toma globalmente.
+    # Si hubieras modificado security_utils para que encrypt_data TOME la clave:
+    # db_user.mfa_secret_encrypted = encrypt_data(mfa_secret_plain, settings.FERNET_KEY)
+    db_user.mfa_secret_encrypted = encrypt_data(mfa_secret_plain) # Asume que encrypt_data usa global Fernet
+
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+async def set_app_user_mfa_status(db: AsyncSession, db_user: AppUser, enabled: bool) -> AppUser:
+    db_user.mfa_enabled = enabled
+    if not enabled: 
+        db_user.mfa_secret_encrypted = None
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+async def get_decrypted_mfa_secret(db_user: AppUser) -> Optional[str]:
+    if db_user.mfa_secret_encrypted: # No necesitas settings.FERNET_KEY aquí si decrypt_data lo usa globalmente
+        # decrypted_value = decrypt_data(db_user.mfa_secret_encrypted, settings.FERNET_KEY)
+        decrypted_value = decrypt_data(db_user.mfa_secret_encrypted) # Asume que decrypt_data usa global Fernet
+        if decrypted_value == "[DATO ENCRIPTADO INVÁLIDO O ERROR DE DESENCRIPTACIÓN]": # El string que devuelve tu decrypt_data en error
+            print(f"ERROR CRUD (AppUser): Falló la desencriptación del secreto MFA para usuario {db_user.username_ad}")
+            return None
+        return decrypted_value
+    return None
+
+async def update_app_user_roles(db: AsyncSession, db_user: AppUser, role_ids: List[int]) -> AppUser:
+    if not role_ids: # Si se pasa una lista vacía, quitar todos los roles
+        db_user.roles = []
+    else:
+        new_roles_q_result = await db.execute(select(Role).filter(Role.id.in_(role_ids)))
+        new_roles_list_from_db = new_roles_q_result.scalars().all()
+        
+        if len(new_roles_list_from_db) != len(set(role_ids)):
+             # Para encontrar cuáles faltan (opcional, para mejor mensaje de error)
+            # found_ids = {r.id for r in new_roles_list_from_db}
+            # missing_ids = set(role_ids) - found_ids
+            # print(f"ADVERTENCIA CRUD (AppUser): IDs de rol no encontrados: {missing_ids}")
+            raise ValueError("Uno o más IDs de rol proporcionados no existen en la BD.")
+            
+        db_user.roles = new_roles_list_from_db
+    
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    # Cargar las relaciones actualizadas es crucial aquí si la sesión original ya no está activa o para estar seguros
+    return await get_app_user_by_id(db, db_user.id) if db_user.id else db_user
+
+ 
+
+ 

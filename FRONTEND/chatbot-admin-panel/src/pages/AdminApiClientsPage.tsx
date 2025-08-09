@@ -28,6 +28,7 @@ import { PencilSquareIcon, PlusIcon, PlayCircleIcon, InformationCircleIcon, KeyI
  
 // Al principio de src/pages/AdminApiClientsPage.tsx
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query'; 
 
 // ...resto de tus imports
 
@@ -44,7 +45,8 @@ const AdminApiClientsPage: React.FC = () => {
   const [apiKeyToDisplay, setApiKeyToDisplay] = useState<string | null>(null);
 
   const queryParams: ReadAllApiClientsParams = { skip: 0, limit: 100 }; 
-  
+  // <--- CAMBIO 2: Obtén la instancia del Query Client
+  const queryClient = useQueryClient();
   const {
     data: apiClientsData, 
     isLoading: isLoadingApiClients,
@@ -87,6 +89,8 @@ const AdminApiClientsPage: React.FC = () => {
     mutation: {
       onSuccess: (responseFromApi: ApiClientWithPlainKeyResponse) => { 
         toast.success(`Cliente API "${responseFromApi.name}" creado.`);
+        queryClient.invalidateQueries({ queryKey: ['adminApiClientsList'] });
+
         if (responseFromApi.api_key_plain) { 
           setApiKeyToDisplay(responseFromApi.api_key_plain);
             localStorage.setItem('test_chat_api_key', responseFromApi.api_key_plain);
@@ -115,6 +119,8 @@ const AdminApiClientsPage: React.FC = () => {
      mutation: {
       onSuccess: (updatedApiClient: ApiClientResponse) => { // El update no devuelve la clave
         toast.success(`Cliente API "${updatedApiClient.name}" actualizado.`);
+        queryClient.invalidateQueries({ queryKey: ['adminApiClientsList'] });
+
         refetchApiClients(); 
         handleCloseEditModal();
       },
@@ -126,6 +132,7 @@ const AdminApiClientsPage: React.FC = () => {
      mutation: {
       onSuccess: () => {
         toast.success(`Cliente API "${selectedApiClientForOps?.name || 'seleccionado'}" eliminado.`);
+        queryClient.invalidateQueries({ queryKey: ['adminApiClientsList'] });
         refetchApiClients(); 
         handleCloseDeleteModal();
       },
@@ -138,6 +145,7 @@ const AdminApiClientsPage: React.FC = () => {
   const regenerateApiKeyMutation = useRegenerateApiKeyForClient({ // <-- Usando el nombre de hook corto/nuevo
     mutation: {
       onSuccess: (responseFromApi: ApiClientWithPlainKeyResponse) => { // Correctamente tipado
+      queryClient.invalidateQueries({ queryKey: ['adminApiClientsList'] });  
         if (responseFromApi?.api_key_plain) {
             toast.success(`Nueva Cliente ID Generado para "${responseFromApi.name}". Cópialo ahora.`);
             setApiKeyToDisplay(responseFromApi.api_key_plain);
@@ -154,21 +162,49 @@ const AdminApiClientsPage: React.FC = () => {
     }
   });
 
-  const handleOpenCreateModal = () => { setSelectedApiClientForOps(null); setIsCreateModalOpen(true); };
-  const handleCloseCreateModal = () => { if(!createApiClientMutation.isPending) setIsCreateModalOpen(false); };
+  // Lógica para el modal de CREACIÓN
+  const handleOpenCreateModal = () => {
+    setSelectedApiClientForOps(null);
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false); 
+  };
+  
   const handleCreateSubmit = (formData: ApiClientCreate | ApiClientUpdate) => {
       createApiClientMutation.mutate({ data: formData as ApiClientCreate });
   };
 
-  const handleOpenEditModal = (client: ApiClientResponse) => { setSelectedApiClientForOps(client); setIsEditModalOpen(true); };
-  const handleCloseEditModal = () => { if(!updateApiClientMutation.isPending) { setIsEditModalOpen(false); setSelectedApiClientForOps(null); }};
+
+  // Lógica para el modal de EDICIÓN
+  const handleOpenEditModal = (client: ApiClientResponse) => {
+    setSelectedApiClientForOps(client);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedApiClientForOps(null);
+  };
+
   const handleEditSubmit = (formData: ApiClientCreate | ApiClientUpdate) => { 
     if (!selectedApiClientForOps?.id) return;
     updateApiClientMutation.mutate({ apiClientId: selectedApiClientForOps.id, data: formData as ApiClientUpdate });
   };
 
-  const handleOpenDeleteModal = (client: ApiClientResponse) => {setSelectedApiClientForOps(client); setIsDeleteModalOpen(true);};
-  const handleCloseDeleteModal = () => { if(!deleteApiClientMutation.isPending) {setIsDeleteModalOpen(false); setSelectedApiClientForOps(null); }};
+
+  // Lógica para el modal de ELIMINACIÓN
+  const handleOpenDeleteModal = (client: ApiClientResponse) => {
+    setSelectedApiClientForOps(client);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setSelectedApiClientForOps(null);
+  };
+  
   const handleConfirmDelete = () => { 
     if (!selectedApiClientForOps?.id) return; 
     deleteApiClientMutation.mutate({ apiClientId: selectedApiClientForOps.id }); 
