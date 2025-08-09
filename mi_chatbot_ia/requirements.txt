@@ -5,6 +5,7 @@ aiosignal==1.4.0
 alembic==1.16.4
 annotated-types==0.7.0
 anyio==4.9.0
+async-timeout==5.0.1
 asyncpg==0.30.0
 attrs==25.3.0
 backoff==2.2.1
@@ -27,6 +28,7 @@ docx2txt==0.9
 ecdsa==0.19.1
 email_validator==2.2.0
 emoji==2.14.1
+et_xmlfile==2.0.0
 fastapi==0.116.1
 fastapi-cache2==0.2.2
 filelock==3.18.0
@@ -43,6 +45,7 @@ googleapis-common-protos==1.70.0
 greenlet==3.2.3
 grpcio==1.74.0
 grpcio-status==1.62.3
+gunicorn==23.0.0
 h11==0.16.0
 html5lib==1.1
 httpcore==1.0.9
@@ -81,6 +84,7 @@ nltk==3.9.1
 numpy==1.26.4
 olefile==0.47
 openai==1.97.1
+openpyxl==3.1.5
 orjson==3.11.1
 packaging==23.2
 passlib==1.7.4
@@ -114,6 +118,7 @@ python-jose==3.5.0
 python-magic==0.4.27
 python-multipart==0.0.20
 python-oxmsg==0.0.2
+python-pptx==1.0.2
 PyYAML==6.0.2
 qrcode==8.2
 RapidFuzz==3.13.0
@@ -155,4 +160,5 @@ webencodings==0.5.1
 websockets==15.0.1
 wheel==0.45.1
 wrapt==1.17.2
+xlsxwriter==3.2.5
 yarl==1.20.1
