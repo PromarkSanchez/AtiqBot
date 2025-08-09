@@ -1,30 +1,24 @@
-# Usa una imagen base oficial de Python que coincida con tu entorno local.
-# "slim" es una versión más ligera y recomendada para producción.
+# Usar una imagen base de Python 3.13
 FROM python:3.13-slim
 
-# Establece el directorio de trabajo dentro del contenedor
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# ---- Dependencias del Sistema Operativo ----
-# Esto es para instalar Tesseract y Poppler en el entorno Linux del contenedor
+# Instalar dependencias del sistema operativo para OCR
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-spa \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Dependencias de Python ----
-# Copia tu archivo de requerimientos (que sabes que funciona con Python 3.13)
+# Copiar archivo de requerimientos
 COPY requirements.txt .
 
-# Instala las librerías de Python desde tu archivo
+# Instalar dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia todo el código de tu aplicación al contenedor
+# Copiar el código de la aplicación
 COPY . .
 
-# Expone el puerto que usará tu aplicación (Render lo gestionará)
-EXPOSE 10000
-
-# El comando para iniciar Uvicorn. Render puede sobrescribir esto con el "Start Command".
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
+# Comando para iniciar la aplicación (Render usará la variable $PORT)
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:$PORT", "app.main:app"]
