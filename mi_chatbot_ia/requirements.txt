@@ -30,8 +30,10 @@ attrs==25.3.0
     # via aiohttp
 backoff==2.2.1
     # via unstructured
-bcrypt==4.3.0
-    # via passlib
+bcrypt==3.2.0
+    # via
+    #   -r requirements.in
+    #   passlib
 beautifulsoup4==4.13.4
     # via unstructured
 boto3==1.34.162
@@ -48,7 +50,9 @@ certifi==2025.7.14
     #   httpx
     #   requests
 cffi==1.17.1
-    # via cryptography
+    # via
+    #   bcrypt
+    #   cryptography
 charset-normalizer==3.4.2
     # via
     #   requests
@@ -418,6 +422,7 @@ sentence-transformers==5.0.0
     # via -r requirements.in
 six==1.17.0
     # via
+    #   bcrypt
     #   ecdsa
     #   html5lib
     #   langdetect

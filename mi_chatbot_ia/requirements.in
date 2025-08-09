@@ -14,6 +14,7 @@ redis
 
 # Autenticación y Seguridad
 python-multipart
+bcrypt==3.2.0
 passlib[bcrypt]
 python-jose[cryptography]
 ldap3

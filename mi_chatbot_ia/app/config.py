@@ -30,7 +30,9 @@ class Settings(BaseSettings):
         "https://chatbot.atiqtec.com/",
         "https://adminchat.atiqtec.com/",
         "https://mi-chatbot-backend.onrender.com/",
-        "https://atiqtec.com/"    ]
+        "https://atiqtec.com/"    
+    
+    ]
 
     # ==========================================================
     # ======>        NUEVA CONFIGURACIÓN DE REDIS        <======
