@@ -27,11 +27,9 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:8000", 
         "http://localhost:5173",
-        "https://chatbot.atiqtec.com/",
-        "https://adminchat.atiqtec.com/",
-        "https://mi-chatbot-backend.onrender.com/",
-        "https://atiqtec.com/"    
-    
+        "https://chatbot.atiqtec.com",
+        "https://adminchat.atiqtec.com",
+        "https://atiqtec.com"
     ]
 
     # ==========================================================
