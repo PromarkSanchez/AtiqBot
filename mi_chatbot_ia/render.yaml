@@ -1,0 +1,58 @@
+# render.yaml - Versión actualizada para usar Docker y OCR
+
+services:
+- type: web
+  name: mi-chatbot-backend # Mismo nombre que tenías
+  # --- CAMBIO #1: Cambiamos el runtime a Docker ---
+  runtime: docker
+  repo: https://github.com/PromarkSanchez/proyecto1
+  plan: standard
+  region: ohio
+  
+  # --- CAMBIO #2: Dockerfile Path ---
+  # Le decimos a Render dónde encontrar el Dockerfile que creamos.
+  # Debe estar relativo a la raíz del repositorio.
+  dockerfilePath: ./mi_chatbot_ia/Dockerfile
+
+  # El "buildCommand" ya no se usa, Dockerfile se encarga de eso.
+
+  # --- CAMBIO #3: Verificando el Start Command ---
+  # Tu startCommand con Gunicorn es perfecto para producción.
+  # Solo asegúrate que el puerto coincida con lo que Docker EXPOSE, aunque Render lo inyecta.
+  startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:10000 app.main:app
+
+  # El 'rootDir' es manejado por el WORKDIR en el Dockerfile, así que lo quitamos.
+
+  autoDeploy: yes # Cambiado de `autoDeployTrigger` para la nueva sintaxis (más claro)
+
+  # Tus dominios y variables de entorno se mantienen exactamente igual.
+  domains:
+  - chatbot.atiqtec.com
+  envVars:
+  - key: REDIS_URL
+    sync: false
+  # ... (y el resto de tus variables de entorno, no las borres) ...
+  - key: AD_BASE_DN
+    sync: false
+  - key: AD_SERVER_URL
+    sync: false
+  - key: JWT_SECRET_KEY
+    sync: false
+  - key: FERNET_KEY
+    sync: false
+  - key: DB_ENCRYPTION_KEY
+    sync: false
+  - key: GEMINI_API_KEY
+    sync: false
+  - key: SYNC_DATABASE_VECTOR_URL
+    sync: false
+  - key: SYNC_DATABASE_CRUD_URL
+    sync: false
+  - key: DATABASE_VECTOR_URL
+    sync: false
+  - key: DATABASE_CRUD_URL
+    sync: false
+
+# Esta línea final es buena práctica para asegurar que Render sepa que es un blueprint
+# Puede que la añada él solo, pero no está de más ponerla.
+version: "1"
