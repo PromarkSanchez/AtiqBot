@@ -7,7 +7,7 @@ services:
     repo: https://github.com/PromarkSanchez/proyecto1
     plan: standard
     region: ohio
-    dockerfilePath: ./mi-chatbot_ia/Dockerfile
+    dockerfilePath: ./mi_chatbot_ia
     autoDeploy: yes
     domains:
       - chatbot.atiqtec.com
