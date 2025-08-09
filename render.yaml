@@ -14,13 +14,12 @@ services:
   # Debe estar relativo a la raíz del repositorio.
   dockerfilePath: ./mi_chatbot_ia/Dockerfile
 
+
   # El "buildCommand" ya no se usa, Dockerfile se encarga de eso.
 
   # --- CAMBIO #3: Verificando el Start Command ---
   # Tu startCommand con Gunicorn es perfecto para producción.
   # Solo asegúrate que el puerto coincida con lo que Docker EXPOSE, aunque Render lo inyecta.
-  startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:10000 app.main:app
-
   # El 'rootDir' es manejado por el WORKDIR en el Dockerfile, así que lo quitamos.
 
   autoDeploy: yes # Cambiado de `autoDeployTrigger` para la nueva sintaxis (más claro)
