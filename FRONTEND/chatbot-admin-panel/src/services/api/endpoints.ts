@@ -39,6 +39,7 @@ import type {
   AppUserUpdate,
   AuthorizedMenuResponse,
   BodyLoginAdminUnificadoApiV1AdminAuthLoginPost,
+  BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost,
   ChatRequest,
   ChatResponse,
   ContextDefinitionCreate,
@@ -48,6 +49,7 @@ import type {
   DatabaseConnectionResponse,
   DatabaseConnectionUpdate,
   DbInspectionResponse,
+  DeleteDocumentRequest,
   DocumentSourceCreate,
   DocumentSourceResponse,
   DocumentSourceUpdate,
@@ -83,6 +85,7 @@ import type {
   RoleResponse,
   RoleUpdate,
   TokenSchema,
+  UploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost200,
   UserCreate,
   UserResponse,
   VirtualAgentProfileCreate,
@@ -5344,6 +5347,232 @@ export const useDeleteHumanAgentEndpointApiV1HumanAgentGroupsHumanAgentsAgentIdD
       return useMutation(mutationOptions , queryClient);
     }
     
+/**
+ * Endpoint para subir documentos, procesarlos y añadirlos a la base de conocimiento vectorial.
+
+- **Autenticación:** Requiere un usuario administrador con los roles adecuados.
+- **Validación:** Limita la subida a un máximo de 5 archivos y verifica que el Contexto exista.
+- **Proceso:** Llama al servicio de ingesta para manejar la lógica de carga, división y vectorización.
+- **Respuesta:** Devuelve un resumen del resultado de la operación.
+ * @summary Subir y vectorizar hasta 5 documentos para un contexto específico
+ */
+export const uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost = (
+    bodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+      
+      const formData = new FormData();
+bodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost.files.forEach(value => formData.append(`files`, value));
+formData.append(`context_id`, bodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost.context_id.toString())
+
+      return axiosInstance<UploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost200>(
+      {url: `/api/v1/admin/ingestion/upload-documents`, method: 'POST',
+      headers: {'Content-Type': 'multipart/form-data', },
+       data: formData, signal
+    },
+      options);
+    }
+  
+
+
+export const getUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPostMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>, TError,{data: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>, TError,{data: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost}, TContext> => {
+
+const mutationKey = ['uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>, {data: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPostMutationResult = NonNullable<Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>>
+    export type UploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPostMutationBody = BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost
+    export type UploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPostMutationError = ErrorType<HTTPValidationError>
+
+    /**
+ * @summary Subir y vectorizar hasta 5 documentos para un contexto específico
+ */
+export const useUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>, TError,{data: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost>>,
+        TError,
+        {data: BodyUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPost},
+        TContext
+      > => {
+
+      const mutationOptions = getUploadAndIngestDocumentsApiV1AdminIngestionUploadDocumentsPostMutationOptions(options);
+
+      return useMutation(mutationOptions , queryClient);
+    }
+    
+/**
+ * @summary Eliminar un documento específico y sus chunks de un contexto
+ */
+export const deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete = (
+    deleteDocumentRequest: DeleteDocumentRequest,
+ options?: SecondParameter<typeof axiosInstance>,) => {
+      
+      
+      return axiosInstance<unknown>(
+      {url: `/api/v1/admin/ingestion/delete-document`, method: 'DELETE',
+      headers: {'Content-Type': 'application/json', },
+      data: deleteDocumentRequest
+    },
+      options);
+    }
+  
+
+
+export const getDeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDeleteMutationOptions = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>, TError,{data: DeleteDocumentRequest}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>, TError,{data: DeleteDocumentRequest}, TContext> => {
+
+const mutationKey = ['deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>, {data: DeleteDocumentRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>>
+    export type DeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDeleteMutationBody = DeleteDocumentRequest
+    export type DeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDeleteMutationError = ErrorType<HTTPValidationError>
+
+    /**
+ * @summary Eliminar un documento específico y sus chunks de un contexto
+ */
+export const useDeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete = <TError = ErrorType<HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>, TError,{data: DeleteDocumentRequest}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDelete>>,
+        TError,
+        {data: DeleteDocumentRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteIngestedDocumentApiV1AdminIngestionDeleteDocumentDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions , queryClient);
+    }
+    
+/**
+ * @summary Listar los documentos subidos manualmente para un contexto
+ */
+export const listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet = (
+    contextId: number,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+      
+      
+      return axiosInstance<string[]>(
+      {url: `/api/v1/admin/ingestion/list-documents/${contextId}`, method: 'GET', signal
+    },
+      options);
+    }
+  
+
+export const getListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryKey = (contextId: number,) => {
+    return [`/api/v1/admin/ingestion/list-documents/${contextId}`] as const;
+    }
+
+    
+export const getListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryOptions = <TData = Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError = ErrorType<HTTPValidationError>>(contextId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryKey(contextId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>> = ({ signal }) => listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet(contextId, requestOptions, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(contextId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>>
+export type ListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryError = ErrorType<HTTPValidationError>
+
+
+export function useListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet<TData = Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ contextId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet<TData = Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ contextId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet<TData = Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ contextId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Listar los documentos subidos manualmente para un contexto
+ */
+
+export function useListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet<TData = Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError = ErrorType<HTTPValidationError>>(
+ contextId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGet>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListManualUploadDocumentsApiV1AdminIngestionListDocumentsContextIdGetQueryOptions(contextId,options)
+
+  const query = useQuery(queryOptions , queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
 /**
  * Endpoint de monitoreo para verificar que la aplicación está viva.
  * @summary Health Check

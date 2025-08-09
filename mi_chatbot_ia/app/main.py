@@ -25,6 +25,7 @@ from app.api.endpoints import human_agent_endpoints
 from app.api.endpoints import llm_model_config_endpoints
 from app.api.endpoints import user_endpoints
 from app.api.endpoints import virtual_agent_profile_endpoints
+from app.api.endpoints import admin_ingestion_endpoints # <-- AÑADIR ESTA LÍNEA
 
 from app.config import settings # Asumo que tienes un config.py con un objeto `settings`
 
@@ -141,6 +142,7 @@ app.include_router(db_connection_endpoints.router, tags=["Admin - Context & Data
 app.include_router(llm_model_config_endpoints.router, tags=["Admin - LLM Configurations"])
 app.include_router(virtual_agent_profile_endpoints.router, tags=["Admin - LLM Configurations"])
 app.include_router(human_agent_endpoints.router, tags=["Admin - LLM Configurations"])
+app.include_router(admin_ingestion_endpoints.router, tags=["Admin - Ingestion & Utilities"]) # <-- AÑADIR ESTA LÍNEA
 
 # --- Root and Health Check ---
 @app.get("/", tags=["Default"], include_in_schema=False)

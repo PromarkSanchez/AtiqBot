@@ -1,3 +1,12 @@
+
+deactivate
+rmdir /s /q .venv
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+
+
 pip install pip-tools
 pip-compile
 pip-sync
@@ -33,6 +42,10 @@ C:\Users\perse>ollama list
 NAME                    ID              SIZE      MODIFIED
 mixtral:latest          a3b6bef0f836    26 GB     15 seconds ago
 llama3-chatqa:latest    b37a98d204b2    4.7 GB    11 minutes ago
+
+
+ocr
+pip install "unstructured[local-inference]" pytesseract Pillow
 
 C:\Users\perse>
 
