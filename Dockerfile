@@ -1,7 +1,7 @@
 # Usa una imagen base de Python 3.13
 FROM python:3.13-slim
 
-# Establece /app como el directorio de trabajo inicial
+# Establece el directorio de trabajo donde vivirá todo.
 WORKDIR /app
 
 # Instala dependencias del sistema operativo para OCR
@@ -12,16 +12,19 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia solo el archivo de requerimientos primero, para aprovechar la caché de Docker
-COPY mi_chatbot_ia/requirements.txt ./
+# Copia tu código Python DENTRO de una subcarpeta, para mantener el orden.
+# Es una práctica recomendada no mezclar código con archivos de configuración.
+COPY mi_chatbot_ia/ /app/
 
-# Instala las dependencias de Python
+# ------- ¡LA MAGIA ESTÁ AQUÍ! -------
+# Le decimos a Python: "Cuando busques módulos, busca en /app".
+# De esta forma, cuando Gunicorn pida "app.main:app", Python sabrá que
+# debe buscar una carpeta llamada 'app' dentro de '/app'.
+ENV PYTHONPATH=/app
+# -----------------------------------
+
+# Instala las dependencias de Python (el requirements.txt ya está en /app)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Ahora copia todo el código de tu aplicación al directorio de trabajo actual (/app)
-COPY mi_chatbot_ia/ .
-
-# El comando para iniciar la aplicación.
-# Como el 'WORKDIR' es '/app' y dentro de él está la carpeta 'app' y el 'main.py',
-# Gunicorn lo encontrará correctamente.
+# El CMD para iniciar la aplicación. Ahora Python SÍ encontrará 'app.main:app'.
 CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:$PORT", "app.main:app"]
