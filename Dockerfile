@@ -1,30 +1,26 @@
-# Usa una imagen base de Python 3.13
 FROM python:3.13-slim
 
-# Establece el directorio de trabajo donde vivirá todo.
+# Establece el directorio de trabajo donde vivirá el código
 WORKDIR /app
 
-# Instala dependencias del sistema operativo para OCR
+# Instala todas las dependencias del sistema operativo que descubrimos que eran necesarias
 RUN apt-get update && apt-get install -y \
     build-essential \
     tesseract-ocr \
     tesseract-ocr-spa \
     poppler-utils \
+    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia tu código Python DENTRO de una subcarpeta, para mantener el orden.
-# Es una práctica recomendada no mezclar código con archivos de configuración.
-COPY mi_chatbot_ia/ /app/
+# Copia primero el requirements.txt para aprovechar la caché de Docker
+COPY mi_chatbot_ia/requirements.txt ./
 
-# ------- ¡LA MAGIA ESTÁ AQUÍ! -------
-# Le decimos a Python: "Cuando busques módulos, busca en /app".
-# De esta forma, cuando Gunicorn pida "app.main:app", Python sabrá que
-# debe buscar una carpeta llamada 'app' dentro de '/app'.
-ENV PYTHONPATH=/app
-# -----------------------------------
-
-# Instala las dependencias de Python (el requirements.txt ya está en /app)
+# Instala las dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# El CMD para iniciar la aplicación. Ahora Python SÍ encontrará 'app.main:app'.
-CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:$PORT", "app.main:app"]
+# Copia el resto del código de tu aplicación al directorio de trabajo
+COPY mi_chatbot_ia/ .
+
+# El comando de inicio: "usa el $PORT de Render, o si no existe, usa 10000"
+# (Render siempre te dará un $PORT). Incluimos el --preload que mencionaste.
+CMD gunicorn --preload -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-10000} app.main:app

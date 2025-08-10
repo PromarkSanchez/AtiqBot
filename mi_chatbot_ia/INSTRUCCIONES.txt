@@ -78,3 +78,19 @@ GROUP BY
     contexto, archivo
 ORDER BY 
     contexto, archivo;
+
+
+
+    docker run --rm -p 8000:8000 \
+-e DATABASE_VECTOR_URL="postgresql+asyncpg://chatbotvector_user:9kX7FLbC4Gk21wXH7iGpusQAxs2DIFjy@dpg-d2aev1juibrs73aca3p0-a.ohio-postgres.render.com/chatbotvector" \
+-e SYNC_DATABASE_VECTOR_URL="postgresql+psycopg2://chatbotvector_user:9kX7FLbC4Gk21wXH7iGpusQAxs2DIFjy@dpg-d2aev1juibrs73aca3p0-a.ohio-postgres.render.com/chatbotvector" \
+-e DATABASE_CRUD_URL="postgresql+asyncpg://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a.ohio-postgres.render.com/chatbot_db_auqx" \
+-e SYNC_DATABASE_CRUD_URL="postgresql+psycopg2://perseo:zcR32kQZwsZIX7vXg5GoYlE9eNCJ3mzR@dpg-d2a8hg7diees738on6s0-a.ohio-postgres.render.com/chatbot_db_auqx" \
+-e GEMINI_API_KEY="AIzaSyDIqyEflXeiHcWaTq7hNRpJuAo0JRV9ZHQ" \
+-e DB_ENCRYPTION_KEY="IdlDuGRYIduwsQ-uiF-zJujcRWWktdWJx8CUSWyuMGE=" \
+-e FERNET_KEY="iv5_46K3guhdtBsV-0pJYJZtYCMhWl7OjMOCkOetCQ8=" \
+-e JWT_SECRET_KEY="zJujcRWWktdWJx8CUSWyuMGEIdlDuGRYIduwsQAIzaSyDIqyEflXeiHcWaTq7hNRpJuAo0JRV9ZHQ" \
+-e AD_SERVER_URL="111" \
+-e AD_BASE_DN="dc=111" \
+-e REDIS_URL="rediss://default:AVppAAIjcDFmMmQ2ZmRlZTIxNTM0ZWRjYmJlZmQyMTExYTJmN2ZmZnAxMA@primary-bedbug-23145.upstash.io:6379" \
+mi-chatbot-backend:dev
