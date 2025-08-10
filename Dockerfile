@@ -24,4 +24,4 @@ COPY mi_chatbot_ia/ .
 
 # El comando de inicio: "usa el $PORT de Render, o si no existe, usa 10000"
 # (Render siempre te dará un $PORT). Incluimos el --preload que mencionaste.
-CMD gunicorn --preload -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-10000} app.main:app
+CMD gunicorn --preload -w 2 -k uvicorn.workers.UvicornWorker --timeout 180 -b 0.0.0.0:${PORT:-10000} app.main:app
