@@ -1,3 +1,4 @@
+# Usa la imagen base de Python que te funcionó localmente (3.13)
 FROM python:3.13-slim
 
 # Establece el directorio de trabajo donde vivirá el código
