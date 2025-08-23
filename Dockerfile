@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-spa \
     poppler-utils \
-    libgl1-mesa-glx \
+    libgl1\
     && rm -rf /var/lib/apt/lists/*
 
 # Copia primero el requirements.txt para aprovechar la caché de Docker
