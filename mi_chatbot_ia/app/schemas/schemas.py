@@ -563,9 +563,9 @@ class WebchatUIConfig(BaseModel):
     showBetaBadge: Optional[bool] = False
     footerEnabled: Optional[bool] = True
     footerText: Optional[str] = "Powered by AtiqTec"
-    footerLink: Optional[str] = "https://atiqtec.com"
+    footerLink: Optional[str] = "https://atiqtec.com/"
     initialState: Optional[WebchatInitialState] = WebchatInitialState.CLOSED
-    initialStateText: Optional[str] = "¡Hola! ¿Podemos ayudarte?"
+    initialStateText: Optional[str] = "Cuentame, que necesitas?"
     avatarImageUrl: Optional[str] = None
     floatingButtonImageUrl: Optional[str] = None
     
@@ -755,6 +755,7 @@ class AppUserLocalCreate(AppUserBase):
 class AppUserUpdate(BaseModel):
     email: Optional[EmailStr] = None; full_name: Optional[str] = Field(None, max_length=255)
     is_active_local: Optional[bool] = None
+    mfa_enabled: Optional[bool] = None
     role_ids: Optional[List[int]] = Field(None, description="Para actualizar la lista completa de roles asignados.")
 
 class AppUserResponse(AppUserBase, OrmBaseModel):

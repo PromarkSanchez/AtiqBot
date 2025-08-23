@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production" # Puede ser "development" o "production"
     
     # Los orígenes permitidos para conectarse a tu API.
-
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:8000", 
         "http://localhost:5173",
@@ -55,10 +54,13 @@ class Settings(BaseSettings):
     FERNET_KEY: str # Requerido en .env para encriptación.
     
     # --- Active Directory (Admin Auth) ---
-    AD_SERVER_URL: Optional[str] = "ldap://172.17.100.2"
-    AD_BASE_DN: Optional[str] = "dc=upch,dc=edu,dc=pe"
-    AD_UPN_SUFFIX: Optional[str] = "upch.edu.pe"
-    AD_DOMAIN_NT: Optional[str] = "upchnt"
+
+    AD_SERVER_URL: Optional[str] = "--"
+    AD_BASE_DN: Optional[str] = "--"
+    AD_UPN_SUFFIX: Optional[str] = "--"
+    AD_DOMAIN_NT: Optional[str] = "--"
+
+
     AD_USERNAME_AD_ATTRIBUTE_TO_STORE: str = "sAMAccountName"
     AD_TIMEOUT_SECONDS: int = 10
     
@@ -77,7 +79,7 @@ class Settings(BaseSettings):
     DW_TABLE_PREFIXES_FOR_INTENT: List[str] = ["AGR_", "DIM_", "FCT_", "FACT_"]
     MAX_RETRIEVED_CHUNKS_RAG: int = 8
     CHAT_HISTORY_WINDOW_SIZE_RAG: int = 6
-    CHAT_HISTORY_WINDOW_SIZE_SQL: int = 0
+    CHAT_HISTORY_WINDOW_SIZE_SQL: int = 0 
 
     # --- PROMPTS POR DEFECTO / FALLBACK ---
 

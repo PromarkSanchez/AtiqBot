@@ -1,262 +1,182 @@
 // src/pages/AdminUsersPage.tsx
-import React, { useState } from 'react';
-import { 
-  useReadAllAppUsersEndpointApiV1AdminAppUserManagementGet,
-  useUpdateAppUserEndpointApiV1AdminAppUserManagementAppUserIdPut as useUpdateAppUserByAdminIdEndpointApiV1AdminAppUserManagementAppUserIdPut,
-  useDeleteAppUserEndpointApiV1AdminAppUserManagementAppUserIdDelete as useDeleteAppUserByAdminEndpointApiV1AdminAppUserManagementAppUserIdDelete, 
-  // --> AÑADIMOS EL HOOK PARA CREAR
-  useCreateLocalAdminUserEndpointApiV1AdminAppUserManagementPost,
-} from '../services/api/endpoints'; 
 
-// --> AÑADIMOS EL TIPO AppUserLocalCreate
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import toast, { Toaster } from 'react-hot-toast';
+
+import {
+    useReadAllAppUsersEndpointApiV1AdminAppUserManagementGet as useReadAllUsers,
+    useCreateLocalAdminUserEndpointApiV1AdminAppUserManagementPost as useCreateUser,
+    useUpdateAppUserEndpointApiV1AdminAppUserManagementAppUserIdPut as useUpdateUser,
+    useDeleteAppUserEndpointApiV1AdminAppUserManagementAppUserIdDelete as useDeleteUser,
+} from '../services/api/endpoints';
 import type { AppUserResponse, AppUserUpdateByAdmin, AppUserLocalCreate } from '../services/api/schemas';
 import type { AxiosError } from 'axios';
-import { useQueryClient } from '@tanstack/react-query'; // Añadimos para invalidar caché
-import toast, { Toaster } from 'react-hot-toast'; 
 
 import Modal from '../components/shared/Modal';
-import EditUserForm from '../components/admin/users/EditUserForm'; // Se mantiene el nombre del form
-import { Button } from '../components/shared/Button'; // Para el nuevo botón
-import { PlusIcon } from '@heroicons/react/24/outline'; // Icono para el botón
+import EditUserForm from '../components/admin/users/EditUserForm';
+import { Button, IconButton } from '../components/shared/Button';
+import PageHeader from '../components/ui/PageHeader';
+import { PlusIcon, PencilSquareIcon, TrashIcon, CheckCircleIcon, XCircleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+
+// --- 1. Definimos una clave única y consistente para la query de usuarios ---
+const ADMIN_USERS_QUERY_KEY = ['adminUsersList'];
 
 const AdminUsersPage: React.FC = () => {
-  const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
 
-  // --> UNIFICAMOS Y CLARIFICAMOS LOS ESTADOS
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);  // Modal para crear o editar
-  const [isEditMode, setIsEditMode] = useState(false);              // Para saber en qué modo está el form
-  const [selectedUser, setSelectedUser] = useState<AppUserResponse | null>(null);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<AppUserResponse | null>(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<AppUserResponse | null>(null);
 
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<AppUserResponse | null>(null);
+    // --- 2. Usamos nuestra clave explícita al obtener los datos ---
+    const { data: users = [], isLoading: isLoadingUsers } = useReadAllUsers(
+        { skip: 0, limit: 200 },
+        { query: { queryKey: ADMIN_USERS_QUERY_KEY } }
+    );
 
-  const {
-    data: apiResponse,
-    isLoading: isLoadingUsers,
-    isError: isUsersError,
-  } = useReadAllAppUsersEndpointApiV1AdminAppUserManagementGet({ skip: 0, limit: 200 });
-
-  // --- LAS 3 MUTACIONES ---
-  const updateUserMutation = useUpdateAppUserByAdminIdEndpointApiV1AdminAppUserManagementAppUserIdPut({ 
-    mutation: {
-      onSuccess: (updatedUser) => {
-        toast.success(`Usuario "${updatedUser?.username_ad}" actualizado.`);
-        queryClient.invalidateQueries({ queryKey: ['readAllAppUsersEndpointApiV1AdminAppUserManagementGet'] });
-        handleCloseModal();
-      },
-      onError: () => { /* Tu manejo de error existente */ },
-    },
-  });
-  
-  const deleteUserMutation = useDeleteAppUserByAdminEndpointApiV1AdminAppUserManagementAppUserIdDelete({
-    mutation: {
-      onSuccess: () => {
-        toast.success(`Usuario "${userToDelete?.username_ad}" eliminado.`);
-        queryClient.invalidateQueries({ queryKey: ['readAllAppUsersEndpointApiV1AdminAppUserManagementGet'] });
-        handleCloseDeleteModal();
-      },
-      onError: () => { /* Tu manejo de error existente */ },
-    }
-  });
-
-  const createUserMutation = useCreateLocalAdminUserEndpointApiV1AdminAppUserManagementPost({
-    mutation: {
-      onSuccess: (newUser) => {
-        toast.success(`Usuario "${newUser.username_ad}" creado exitosamente.`);
-        queryClient.invalidateQueries({ queryKey: ['readAllAppUsersEndpointApiV1AdminAppUserManagementGet'] });
-        handleCloseModal();
-      },
-      onError: (error) => { /* Adaptamos tu manejo de error para 'create' */ 
+    const handleMutationError = (error: unknown, action: string) => {
         const axiosError = error as AxiosError<{ detail?: string }>;
-        const message = axiosError.response?.data?.detail || "Error al crear el usuario.";
+        const message = axiosError.response?.data?.detail || `Error al ${action} el usuario.`;
         toast.error(message, { duration: 5000 });
-      },
-    },
-  });
+    };
 
-  const isMutating = updateUserMutation.isPending || deleteUserMutation.isPending || createUserMutation.isPending;
+    const handleCloseModal = () => {
+        // --- 3. ¡LA SOLUCIÓN! Simplificamos la función para que siempre cierre. ---
+        setIsFormModalOpen(false);
+        setSelectedUser(null);
+    };
 
-  // --- HANDLERS UNIFICADOS ---
-  const handleOpenEditModal = (user: AppUserResponse) => {
-    setIsEditMode(true);
-    setSelectedUser(user);
-    setIsFormModalOpen(true);
-  };
-  
-  const handleOpenCreateModal = () => {
-    setIsEditMode(false);
-    setSelectedUser(null);
-    setIsFormModalOpen(true);
-  };
+    const handleCloseDeleteModal = () => {
+        setIsDeleteModalOpen(false);
+        setUserToDelete(null);
+    };
 
-  const handleCloseModal = () => {
-    if (isMutating) return;
-    setIsFormModalOpen(false);
-    setSelectedUser(null);
-  };
-  
-  // --> HANDLER DE SUBMIT DUAL <--
-  const handleFormSubmit = (formData: AppUserUpdateByAdmin | AppUserLocalCreate) => {
-    if (isEditMode && selectedUser) {
-      if (!selectedUser.id) return toast.error("Usuario inválido para actualizar.");
-      updateUserMutation.mutate({ appUserId: selectedUser.id, data: formData as AppUserUpdateByAdmin });
-    } else {
-      createUserMutation.mutate({ data: formData as AppUserLocalCreate });
-    }
-  };
+    // --- 4. Usamos la misma clave para invalidar y refrescar la tabla ---
+    const updateUserMutation = useUpdateUser({
+        mutation: {
+            onSuccess: (updatedUser) => {
+                toast.success(`Usuario "${updatedUser?.username_ad}" actualizado.`);
+                queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY });
+                handleCloseModal(); // Ahora esto funcionará
+            },
+            onError: (error) => handleMutationError(error, 'actualizar'),
+        },
+    });
 
-  const handleOpenDeleteModal = (user: AppUserResponse) => {
-    setUserToDelete(user);
-    setIsDeleteModalOpen(true);
-  };
+    const createUserMutation = useCreateUser({
+        mutation: {
+            onSuccess: (newUser) => {
+                toast.success(`Usuario "${newUser.username_ad}" creado exitosamente.`);
+                queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY });
+                handleCloseModal(); // Y esto también
+            },
+            onError: (error) => handleMutationError(error, 'crear'),
+        },
+    });
 
-  const handleCloseDeleteModal = () => {
-    if (deleteUserMutation.isPending) return;
-    setIsDeleteModalOpen(false);
-    setUserToDelete(null);
-  };
+    const deleteUserMutation = useDeleteUser({
+        mutation: {
+            onSuccess: () => {
+                toast.success(`Usuario "${userToDelete?.username_ad}" eliminado.`);
+                queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY });
+                handleCloseDeleteModal();
+            },
+            onError: (error) => handleMutationError(error, 'eliminar'),
+        },
+    });
 
-  const handleConfirmDelete = () => {
-    if (!userToDelete) return toast.error("Usuario no válido para eliminar.");
-    deleteUserMutation.mutate({ appUserId: userToDelete.id });
-  };
-  
-  if (isLoadingUsers) { return <div>Cargando...</div>; }
-  if (isUsersError) { return <div>Error al cargar usuarios.</div>; }
+    const isMutating = updateUserMutation.isPending || createUserMutation.isPending;
 
-  const users: AppUserResponse[] = apiResponse || [];
+    const handleOpenEditModal = (user: AppUserResponse) => {
+        setIsEditMode(true);
+        setSelectedUser(user);
+        setIsFormModalOpen(true);
+    };
 
-  return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Toaster position="top-right" />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
-          Usuarios Administradores
-        </h1>
-        {/* --> EL NUEVO BOTÓN <-- */}
-        <Button onClick={handleOpenCreateModal} disabled={isMutating}>
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Crear Usuario Local
-        </Button>
-      </div>
+    const handleOpenCreateModal = () => {
+        setIsEditMode(false);
+        setSelectedUser(null);
+        setIsFormModalOpen(true);
+    };
 
-      {users.length > 0 ? (
-        <div className="shadow-lg border border-gray-200 dark:border-gray-700 rounded-lg">
-          <div className="table-responsive-wrapper">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"> 
-              <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
+    const handleFormSubmit = (formData: AppUserUpdateByAdmin | AppUserLocalCreate) => {
+        if (isEditMode && selectedUser) {
+            updateUserMutation.mutate({ appUserId: selectedUser.id, data: formData as AppUserUpdateByAdmin });
+        } else {
+            createUserMutation.mutate({ data: formData as AppUserLocalCreate });
+        }
+    };
 
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Usuario AD</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nombre</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">MFA</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Activo (Local)</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Roles</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap">Acciones</th>
-              </tr>
-            </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {users.map((user) => (
-                  
-                    <tr key={user.id} className={`${!user.is_active_local ? 'opacity-60 bg-gray-100 dark:bg-slate-900' : ''} 
-                      hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors duration-150`}>
+    const handleOpenDeleteModal = (user: AppUserResponse) => {
+        setUserToDelete(user);
+        setIsDeleteModalOpen(true);
+    };
 
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{user.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{user.username_ad}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{user.full_name || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{user.email || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${ user.mfa_enabled ? 'bg-green-100 text-green-800 dark:bg-green-600 dark:text-green-100' : 'bg-red-100 text-red-800 dark:bg-red-600 dark:text-red-100' }`}> {user.mfa_enabled ? 'Sí' : 'No'} </span>
-                  </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${ user.is_active_local ? 'bg-green-100 text-green-800 dark:bg-green-600 dark:text-green-100' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100' }`}> {user.is_active_local ? 'Sí' : 'No'} </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300"> {user.roles && user.roles.length > 0 ? user.roles.map(role => role.name).join(', ') : 'Sin roles'} </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button 
-                        onClick={() => handleOpenEditModal(user)}
-                        className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
-                      >
-                        Editar
-                      </button>
-              
-                      {user.is_active_local ? (
-                        <button 
-                          onClick={() => handleOpenDeleteModal(user)}
-                          disabled={deleteUserMutation.isPending || updateUserMutation.isPending}
-                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Eliminar
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500 italic">Inactivo</span>
-                        
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        </div>
-      ) : (
-        <div className="text-center py-10">
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            {isLoadingUsers ? 'Cargando...' : 'No se encontraron usuarios administradores.'}
-          </p>
-        </div>
-      )}
+    const handleConfirmDelete = () => {
+        if (!userToDelete) return;
+        deleteUserMutation.mutate({ appUserId: userToDelete.id });
+    };
 
-      {/* --> MODAL UNIFICADO PARA CREAR Y EDITAR <-- */}
-      <Modal
-        isOpen={isFormModalOpen}
-        onClose={handleCloseModal}
-        title={isEditMode ? `Editar Usuario: ${selectedUser?.username_ad}` : "Crear Nuevo Usuario Local"}
-      >
-        <EditUserForm
-          user={selectedUser}
-          onFormSubmit={handleFormSubmit}
-          onCancel={handleCloseModal}
-          isSubmitting={isMutating}
-          isEditMode={isEditMode}
-        />
-      </Modal>
-      
-      {/* Tu modal de delete, solo con la variable correcta */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={handleCloseDeleteModal}
-        title="Confirmar Eliminación"
-        footerContent={
-          <>
-            <button
-              type="button"
-              onClick={handleCloseDeleteModal}
-              disabled={deleteUserMutation.isPending} // Usa el estado isPending de deleteUserMutation
-              className="mr-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleConfirmDelete}
-              disabled={deleteUserMutation.isPending} // Usa el estado isPending de deleteUserMutation
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {deleteUserMutation.isPending ? 'Eliminando...' : 'Sí, Eliminar'}
-            </button>
-          </>
-        }      >
-        
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          ¿Estás seguro de que quieres eliminar al usuario 
-          <strong className="font-semibold px-1">{userToDelete?.full_name || userToDelete?.username_ad}</strong>?
-          Esta acción no se puede deshacer. {/* O ajusta el mensaje si es eliminación lógica */}
-        </p>
-      </Modal>
-    </div>
-  );
+    // ... (El resto del JSX se mantiene igual que la versión que te di antes)
+    return (
+        <>
+            <Toaster position="top-right" />
+            <PageHeader title="Usuarios Administradores">
+                <Button onClick={handleOpenCreateModal} icon={<PlusIcon className="h-5 w-5" />}>
+                    Crear Usuario Local
+                </Button>
+            </PageHeader>
+            
+            {isLoadingUsers && <p>Cargando usuarios...</p>}
+            
+            <div className="overflow-x-auto bg-white dark:bg-slate-800 shadow-md rounded-lg">
+                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-slate-700 dark:text-gray-300">
+                        <tr>
+                            <th scope="col" className="px-6 py-3">ID</th>
+                            <th scope="col" className="px-6 py-3">Username / DNI</th>
+                            <th scope="col" className="px-6 py-3">Nombre Completo</th>
+                            <th scope="col" className="px-6 py-3">Método Auth</th>
+                            <th scope="col" className="px-6 py-3 text-center">Activo</th>
+                            <th scope="col" className="px-6 py-3 text-center">MFA</th>
+                            <th scope="col" className="px-6 py-3">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map(user => (
+                            <tr key={user.id} className="bg-white dark:bg-slate-800 border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                                <td className="px-6 py-4">{user.id}</td>
+                                <th scope="row" className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">{user.username_ad}</th>
+                                <td className="px-6 py-4">{user.full_name}</td>
+                                <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${user.auth_method === 'local' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'}`}>{user.auth_method}</span></td>
+                                <td className="px-6 py-4 text-center">{user.is_active_local ? <CheckCircleIcon className="h-5 w-5 text-green-500 mx-auto" /> : <XCircleIcon className="h-5 w-5 text-red-500 mx-auto" />}</td>
+                                <td className="px-6 py-4 text-center">{user.mfa_enabled ? <ShieldCheckIcon className="h-5 w-5 text-blue-500 mx-auto" /> : <XCircleIcon className="h-5 w-5 text-gray-400 mx-auto" />}</td>
+                                <td className="px-6 py-4 flex items-center space-x-2 justify-end">
+                                    <IconButton icon={<PencilSquareIcon className="h-5 w-5"/>} onClick={() => handleOpenEditModal(user)} variant="ghost" aria-label="Editar" />
+                                    <IconButton icon={<TrashIcon className="h-5 w-5"/>} onClick={() => handleOpenDeleteModal(user)} variant="ghost" className="text-red-500 hover:text-red-700" aria-label="Eliminar" />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <Modal isOpen={isFormModalOpen} onClose={handleCloseModal} title={isEditMode ? `Editar Usuario: ${selectedUser?.username_ad}` : "Crear Usuario Local"} size="2xl">
+                <EditUserForm isEditMode={isEditMode} user={selectedUser} onFormSubmit={handleFormSubmit} onCancel={handleCloseModal} isSubmitting={isMutating} />
+            </Modal>
+            
+            <Modal isOpen={isDeleteModalOpen} onClose={handleCloseDeleteModal} title="Confirmar Eliminación" footerContent={
+                <>
+                    <Button variant="secondary" onClick={handleCloseDeleteModal} disabled={deleteUserMutation.isPending}>Cancelar</Button>
+                    <Button variant="danger" onClick={handleConfirmDelete} isLoading={deleteUserMutation.isPending}>Sí, Eliminar</Button>
+                </>}>
+                <p className="text-sm text-gray-700 dark:text-gray-300">¿Estás seguro de que quieres eliminar al usuario <strong className="font-semibold px-1">{userToDelete?.full_name || userToDelete?.username_ad}</strong>?</p>
+            </Modal>
+        </>
+    );
 };
 
 export default AdminUsersPage;

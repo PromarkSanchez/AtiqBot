@@ -24,7 +24,7 @@ router = APIRouter(
      tags=["Admin - API Clients"]
 )
 
-MENU_API_CLIENTS = "Clientes API"
+MENU_API_CLIENTS = "Clientes API" 
 
 @router.post("/", response_model=ApiClientWithPlainKeyResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_api_client_endpoint(api_client_in: ApiClientCreate, db: AsyncSession = Depends(get_crud_db_session), current_user: AppUser = Depends(require_roles(roles=["SuperAdmin"], menu_name=MENU_API_CLIENTS))):

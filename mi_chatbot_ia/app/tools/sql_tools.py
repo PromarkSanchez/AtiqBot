@@ -33,7 +33,7 @@ TOOL_USAGE_PROMPT_TEMPLATE = (
     "2. Responde SIEMPRE con un JSON con las claves 'tool_to_use' y 'parameters'.\n\n**Respuesta JSON:**"
 )
 
- 
+
 ANSWER_GENERATION_PROMPT_TEMPLATE = (
     "## ROL Y OBJETIVO\n"
     "Eres un asistente académico amigable y eficiente llamado Hered-IA. Te diriges al usuario por su nombre, {user_name}.\n"

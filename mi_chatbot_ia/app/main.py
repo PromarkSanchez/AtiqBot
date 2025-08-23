@@ -69,7 +69,8 @@ openapi_tags_metadata = [
     {"name": "Admin - LLM Configurations", "description": "Configuración de modelos LLM, perfiles de agentes virtuales y agentes humanos."},
     {"name": "Admin - Context & Data Sources", "description": "Definición de contextos de conocimiento, fuentes de documentos y conexiones a BD."},
     {"name": "Admin - Ingestion & Utilities", "description": "Operaciones de ingesta de datos y otras utilidades de administración."},
-    {"name": "Default", "description": "Endpoints por defecto o de prueba."}
+    {"name": "Default", "description": "Endpoints por defecto o de prueba."},
+    
 ]
 
 # --- Desactivar la documentación en producción ---
@@ -77,10 +78,10 @@ openapi_tags_metadata = [
 # En un escenario real, harías esto condicional basado en una variable de entorno.
 # Ejemplo: docs_url=None if settings.ENVIRONMENT == "production" else "/docs"
 fastapi_app_kwargs = {
-    "title": "Mi Chatbot IA Personalizable",
+    "title": "AdminBot power by Atiqtec.com",
     "description": (
-        "Un backend API en Python (FastAPI) para un chatbot avanzado con IA, configurable, "
-        "capaz de conectarse a diversas fuentes de contexto y con gestión de permisos para administradores."
+        "Backend creado por AtiqTec.com, cualquier duda o consulta 972588411"
+        "Este Backend es capaz de conectarse a diversas fuentes de contexto y con gestión de permisos para administradores."
     ),
     "version": "0.2.0",
     "openapi_tags": openapi_tags_metadata,

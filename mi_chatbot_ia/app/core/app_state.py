@@ -18,6 +18,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langchain_core.language_models.chat_models import BaseChatModel
+from pathlib import Path
 
 # --- Módulos Locales ---
 from app.config import settings
@@ -64,8 +65,12 @@ class AppState:
         # 1. Modelo de Embeddings (Operación Síncrona)
         print("      [1/5] Cargando Modelo de Embeddings...")
         try:
+            current_file_path = Path(__file__).resolve()
+            project_root = current_file_path.parent.parent.parent
+            model_path  = project_root / "models" / "all-MiniLM-L6-v2-local"
+
             self.embedding_model = SentenceTransformerEmbeddings(
-                model_name=settings.MODEL_NAME_SBERT_FOR_EMBEDDING
+                model_name=str(model_path) # Convertir a string es una buena práctica para máxima compatibilidad
             )
             print("      -> Éxito: Embeddings cargados.")
         except Exception as e:

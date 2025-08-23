@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 import json
 from operator import itemgetter
 import re
-
+from urllib.parse import quote_plus
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -23,6 +23,7 @@ from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.documents import Document as LangchainCoreDocument
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_postgres.vectorstores import PGVector
+ 
 
 # === Imports Locales (La Forma CORRECTA y Centralizada) ===
 # Dependencias para inyección en el endpoint
@@ -136,7 +137,7 @@ async def save_conversation_state_async(
 
     # Manejar nombre de usuario por separado (con un TTL más largo quizás)
     if user_name_to_save:
-        tasks.append(cache_service.set_generic_cache_async(redis_client, username_key, user_name_to_save, ttl_seconds=3600)) # Guardamos el nombre por 1 hora
+        tasks.append(cache_service.set_generic_cache_async(redis_client, username_key, user_name_to_save, ttl_seconds=180)) # Guardamos el nombre por 1 hora
 
     if tasks:
         await asyncio.gather(*tasks)
@@ -148,6 +149,7 @@ async def master_router_agent(
     has_db_capability: bool,
     has_doc_capability: bool,
     llm: BaseChatModel
+
 ) -> str:
     """
     Decide qué herramienta usar: RAG, BD o Despedida.
@@ -161,13 +163,16 @@ async def master_router_agent(
 
     if has_db_capability and not has_doc_capability: return "DATABASE_TOOL"
     if has_doc_capability and not has_db_capability: return "DOCUMENT_RETRIEVER"
-    
+
+
+   
     prompt = ChatPromptTemplate.from_messages([
-        ("system",
-         "Eres un agente enrutador experto. Tu única tarea es seleccionar la herramienta más adecuada para responder la pregunta del usuario. "
+         
+        (f"system",
+         "Tu  Eres un agente enrutador experto. Tu única tarea es seleccionar la herramienta más adecuada para responder la pregunta del usuario. "
          "Responde únicamente con el nombre de la herramienta elegida en formato JSON.\n\n"
          "Herramientas Disponibles:\n"
-         "1. `DOCUMENT_RETRIEVER`: Úsala para preguntas generales, conceptuales o teóricas sobre los temas del curso. Ejemplos: '¿qué son las ecuaciones lineales?', 'explícame los logaritmos'.\n"
+         "1. `DOCUMENT_RETRIEVER`: Úsala para preguntas generales, conceptuales o teóricas sobre los temas u titulos del documento. Ejemplos: '¿como accedo a mi intranet?', 'explícame sobre blackboard', 'quiero saber sobre mis horarios', 'me puedes dar un resumen de lo que sabes'.\n"
          "2. `DATABASE_TOOL`: Úsala para preguntas que piden datos específicos y personales del usuario. Ejemplos: 'quiero saber mis notas', '¿cuál es mi promedio?', 'dame mi horario'.\n"
          "3. `FAREWELL_HANDLER`: Úsala si el usuario se está despidiendo o agradeciendo para finalizar la conversación. Ejemplos: 'gracias', 'eso es todo por ahora', 'adiós'.\n"),
         ("human", "Pregunta del usuario: {question}\n\nRespuesta JSON (solo la clave 'tool_to_use'):"),
@@ -190,7 +195,8 @@ async def handle_greeting(vap: VirtualAgentProfile, llm: BaseChatModel, req: Cha
     """Maneja el saludo inicial. Tu lógica original se mantiene."""
     log = {"intent": "GREETING"}
     chain = ChatPromptTemplate.from_template(vap.greeting_prompt) | llm | StrOutputParser()
-    final_bot_response = await chain.ainvoke({"user_name": req.user_name or "Usuario"})
+    # Cambiamos "Usuario" por "" para no inyectar un nombre falso.
+    final_bot_response = await chain.ainvoke({"user_name": req.user_name or ""})
     
     next_state, next_params = None, None
     if vap.name_confirmation_prompt:
@@ -199,7 +205,120 @@ async def handle_greeting(vap: VirtualAgentProfile, llm: BaseChatModel, req: Cha
         
     return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": next_state, "next_params": next_params}
 
-# En app/api/endpoints/chat_api_endpoints.py
+async def handle_name_and_query_extraction(
+    req: ChatRequest,
+    vap: VirtualAgentProfile,
+    llm: BaseChatModel,
+    user_dni: Optional[str],
+    history_list: List,
+    active_contexts: List[ContextDefinition],
+    all_allowed_contexts: List[ContextDefinition],
+    db: AsyncSession,
+    vector_store: PGVector,
+    app_state: AppState,
+    redis_client: Optional[AsyncRedis]
+) -> Dict[str, Any]:
+    """
+    Handler robusto que extrae, valida, y decide el flujo conversacional correcto,
+    incluyendo el manejo proactivo de saludos simples.
+    """
+    log = {"intent": "COMBINED_NAME_AND_QUERY_EVALUATION", "agent_used": vap.name}
+
+    # (Aquí va el nuevo `extraction_prompt_template_str` que te puse arriba)
+    agent_name = vap.name or "Hered-IA"
+    extraction_prompt_template_str = (
+        f"Tú eres {agent_name}. Tu única tarea es analizar el mensaje de un usuario y extraer dos datos: "
+        "1. `extracted_name`: El nombre de pila del usuario, si lo proporciona. "
+        "2. `follow_up_query`: Una pregunta de seguimiento, si la hace. "
+        "Responde ÚNICAMENTE con un objeto JSON. Si un dato no está presente, usa el valor JSON `null` (no el string \"null\"). "
+        "**Regla Crítica: NO INVENTES una `follow_up_query` si el usuario solo dio un saludo simple.**\n\n"
+        "EJEMPLOS CLAVE DE TU ANÁLISIS:\n"
+        "Input del usuario: 'Hola'\n"
+        "Tu JSON de análisis: {{\"extracted_name\": null, \"follow_up_query\": null}}\n\n"
+        "Input del usuario: 'Buenos días'\n"
+        "Tu JSON de análisis: {{\"extracted_name\": null, \"follow_up_query\": null}}\n\n"
+        "Input del usuario: 'Me llamo Juaneco'\n"
+        "Tu JSON de análisis: {{\"extracted_name\": \"Juaneco\", \"follow_up_query\": null}}\n\n"
+        "Input del usuario: 'Soy Ana y quería saber sobre mi intranet'\n"
+        "Tu JSON de análisis: {{\"extracted_name\": \"Ana\", \"follow_up_query\": \"quería saber sobre mi intranet\"}}\n\n"
+        "Input del usuario: '¿cuál es mi horario?'\n"
+        "Tu JSON de análisis: {{\"extracted_name\": null, \"follow_up_query\": \"¿cuál es mi horario?\"}}\n\n"
+        "--- INICIO DEL MENSAJE DEL USUARIO PARA ANALIZAR ---\n"
+        "Mensaje: \"{user_input}\"\n"
+        "Tu JSON de análisis:"
+    )
+
+    extraction_prompt_template = ChatPromptTemplate.from_template(extraction_prompt_template_str)
+    extraction_chain = extraction_prompt_template | llm | JsonOutputParser()
+
+    try:
+        extraction_result = await extraction_chain.ainvoke({"user_input": req.message.strip()})
+        extracted_name_raw = extraction_result.get("extracted_name")
+        follow_up_query = extraction_result.get("follow_up_query")
+    except Exception as e:
+        print(f"WARN: La extracción combinada falló: {e}. Fallback a saludo proactivo.")
+        extracted_name_raw = None
+        follow_up_query = None # Forzamos el caso de saludo
+
+    # --- Validación de Nombre (la mantenemos porque es crucial) ---
+    final_name_to_save = None
+    INVALID_NAME_VALUES = {'', 'null', 'none', 'n/a', 'usuario', ':null'}
+    if extracted_name_raw:
+        candidate_name = str(extracted_name_raw).strip()
+        if candidate_name and candidate_name.lower() not in INVALID_NAME_VALUES:
+            final_name_to_save = candidate_name.capitalize()
+            log["extracted_user_name"] = final_name_to_save
+            req.user_name = final_name_to_save
+
+    # --- NUEVA LÓGICA DE DECISIÓN (Más clara y robusta) ---
+
+    # CASO A: El usuario hizo una pregunta (con o sin nombre). ¡Máxima prioridad!
+    if follow_up_query:
+        log["intent"] = "QUERY_DETECTED"
+        new_req = req.copy(update={"message": follow_up_query})
+        
+        result = await handle_new_question(
+            req=new_req, user_dni=user_dni, llm=llm, history_list=[],
+            active_contexts=active_contexts, all_allowed_contexts=all_allowed_contexts, vap=vap, 
+            db=db, vector_store=vector_store, app_state=app_state, redis_client=redis_client
+        )
+
+        next_params = result.get("next_params") or {}
+        if final_name_to_save:
+            next_params["user_name"] = final_name_to_save
+        result["next_params"] = next_params
+        result["next_state"] = None if result.get("next_state") != CONV_STATE_AWAITING_TOOL_PARAMS else result["next_state"]
+        return result
+    
+    # CASO B: El usuario SÓLO dio un nombre válido.
+    elif final_name_to_save:
+        log["intent"] = "NAME_CONFIRMATION_ONLY"
+        response_template = "¡Entendido, {user_name}! Ahora sí, ¿en qué puedo ayudarte?"
+        final_bot_response = response_template.format(user_name=final_name_to_save)
+        
+        return {
+            "response": final_bot_response,
+            "metadata": {}, "log": log, "next_state": None,
+            "next_params": {"user_name": final_name_to_save}
+        }
+        
+    # CASO C: El usuario dio un saludo simple ("Hola") o algo que no se entendió. ¡NUESTRO NUEVO MANEJO!
+    else:
+        log["intent"] = "SIMPLE_GREETING_OR_UNRECOGNIZED"
+        print("HANDLER_LOGIC: Saludo simple detectado. Respondiendo proactivamente.")
+
+        # Generamos una respuesta que guía al usuario
+        final_bot_response = (
+            "¡Claro! Con gusto te ayudo. "
+            "Puedo darte información sobre tus horarios, notas, o resolver dudas generales de la intranet. "
+            "¿Qué te gustaría consultar?"
+        )
+        
+        return {
+            "response": final_bot_response,
+            "metadata": {}, "log": log, "next_state": None,
+            "next_params": {} # MUY IMPORTANTE: no guardamos ningún nombre.
+        }
 
 async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm: BaseChatModel) -> Dict[str, Any]:
     """
@@ -207,10 +326,9 @@ async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm:
     """
     log = {"intent": "NAME_CONFIRMATION"}
     
-    # Nuevo prompt para extraer el nombre de forma estructurada (más fiable)
     extraction_prompt_template = (
         "Eres un sistema de extracción de entidades. Analiza el siguiente texto proporcionado por un usuario "
-        "y extrae su nombre de pila. Responde ÚNICAMENTE con un objeto JSON con la clave 'extracted_name'.\n\n"
+        "y extrae su nombre de pila. Responde ÚNICAMENTE con un objeto JSON con la clave 'extracted_name'. Si no encuentras un nombre, devuelve null.\n\n"
         "Texto del usuario: \"{user_provided_name}\"\n"
         "JSON:"
     )
@@ -220,43 +338,108 @@ async def handle_name_confirmation(question: str, vap: VirtualAgentProfile, llm:
         | JsonOutputParser()
     )
     
+    extracted_name = "" # <-- Empezamos con un valor seguro
     try:
         extraction_result = await extraction_chain.ainvoke({"user_provided_name": question.strip()})
-        extracted_name = extraction_result.get("extracted_name", "Usuario").strip().capitalize()
+        # Usamos .get() que devuelve None por defecto si no encuentra la clave
+        name_from_llm = extraction_result.get("extracted_name")
+        if name_from_llm: # Solo procesamos si el LLM devolvió algo
+             extracted_name = str(name_from_llm).strip().capitalize()
     except Exception:
-        # Fallback simple si el JSON falla
-        match = re.search(r'\b(\w+)\b$', question.strip())
-        extracted_name = match.group(1).capitalize() if match else "Usuario"
+        # Fallback si el JSON falla, pero SIN usar "Usuario"
+        print(f"WARN: Fallo en extracción de nombre en handle_name_confirmation. Fallback a cadena vacía.")
+        extracted_name = ""
 
-    # Usamos el nombre extraído para la respuesta
-    response_template = "¡Entendido, {user_name}! Ahora sí, ¿en qué puedo ayudarte?"
-    final_bot_response = response_template.format(user_name=extracted_name)
+    # Ahora la respuesta se adapta
+    if extracted_name:
+        response_template = "¡Entendido, {user_name}! Ahora sí, ¿en qué puedo ayudarte?"
+        final_bot_response = response_template.format(user_name=extracted_name)
+    else:
+        # Si no se extrajo nombre, usamos una respuesta genérica
+        final_bot_response = "¡Entendido! Ahora sí, ¿en qué puedo ayudarte?"
 
-    # Devolvemos el nombre extraído en los "parámetros del siguiente estado"
     return {
         "response": final_bot_response,
         "metadata": {},
         "log": log,
-        "next_state": None, # Limpiamos el estado AWAITING_NAME
-        "next_params": {"user_name": extracted_name} # <-- ¡ESTO ES LO NUEVO!
+        "next_state": None, 
+        # Si extracted_name está vacío, se guardará una cadena vacía. ¡Perfecto!
+        "next_params": {"user_name": extracted_name}
     }
+
+async def is_name_or_query_classifier_chain(question: str, llm: BaseChatModel) -> bool:
+    """
+    Clasifica si la entrada de un usuario es un nombre o una consulta directa.
+    
+    Devuelve:
+        - True si la entrada parece ser un nombre o una presentación.
+        - False si la entrada es una pregunta o una consulta.
+    """
+    classifier_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "Eres un clasificador de intenciones llamado Hered-IA experto y muy rápido. El asistente virtual acaba de preguntar al usuario su nombre. "
+         "Analiza la siguiente respuesta del usuario y determina si es una presentación (un nombre) o si es una consulta/pregunta sobre un tema completamente diferente. "
+         "Responde únicamente con un objeto JSON con una única clave booleana 'is_name'. "
+         "Ejemplos de nombre (is_name: true): 'Soy Juan', 'Me llamo Ana', 'puedes llamarme Pedro', 'Mi nombre es María'. "
+         "Ejemplos de consulta (is_name: false): '¿cuáles son mis notas?', 'quiero saber de mi blackboard', 'necesito ayuda con mi horario', 'olvídalo, quiero saber otra cosa'."
+        ),
+        ("human", "Respuesta del usuario: \"{user_input}\"\n\nJSON:")
+    ])
+    
+    chain = classifier_prompt | llm | JsonOutputParser()
+    
+    try:
+        response = await chain.ainvoke({"user_input": question})
+        # Devuelve el valor booleano, con un fallback seguro a 'False' si hay algún problema
+        return response.get("is_name", False) 
+    except Exception as e:
+        print(f"WARN: Clasificador de nombre/consulta falló: {e}. Asumiendo que es una consulta.")
+        return False # Si el LLM falla, es más seguro tratarlo como una consulta para no atascar al bot.
+
 
 # En app/api/endpoints/chat_api_endpoints.py
 
 async def handle_farewell(vap: VirtualAgentProfile, req: ChatRequest, llm: BaseChatModel) -> Dict[str, Any]:
-    """Maneja la despedida de forma controlada."""
+    """Maneja la despedida de forma controlada y robusta, construyendo el prompt en Python."""
     log = {"intent": "FAREWELL"}
-    
-    # Podemos crear un prompt específico para la despedida en el VirtualAgentProfile a futuro.
-    # Por ahora, usamos una respuesta genérica y efectiva.
+
+    # --- LÓGICA CLAVE: PREPARAMOS LA VARIABLE DEL NOMBRE EN PYTHON ---
+    # Usamos nuestra lista negra para asegurar que no pasen valores no deseados.
+    INVALID_NAME_VALUES = {'', 'null', 'none', 'n/a', 'usuario', ':null'}
+    user_name_for_prompt = ""
+    if req.user_name and str(req.user_name).strip().lower() not in INVALID_NAME_VALUES:
+        user_name_for_prompt = req.user_name.strip()
+
+    # --- CONSTRUCCIÓN DINÁMICA DE LA INSTRUCCIÓN DE PERSONALIZACIÓN ---
+    # Aquí está la magia: decidimos en Python qué instrucción simple le daremos al LLM.
+    if user_name_for_prompt:
+        # CASO 1: Tenemos un nombre real. La instrucción es directa.
+        personalization_instruction = (
+            f"El nombre del usuario es **{user_name_for_prompt}**. "
+            f"Personaliza la despedida dirigiéndote a él por su nombre (ej. '¡Hasta luego, {user_name_for_prompt}!')."
+        )
+        print(f"FAREWELL_LOGIC: Se usará el nombre '{user_name_for_prompt}' para la despedida.")
+    else:
+        # CASO 2: NO tenemos nombre. La instrucción también es directa.
+        personalization_instruction = (
+            "No se ha proporcionado el nombre del usuario. "
+            "Genera una despedida amable y general sin usar ningún nombre."
+        )
+        print("FAREWELL_LOGIC: No se usará nombre para la despedida (genérica).")
+        
+    # --- PROMPT FINAL SIMPLIFICADO ---
+    # El prompt ahora es muy tonto. Solo inserta la instrucción que ya preparamos.
     farewell_prompt_template = (
-        "Tu única tarea es generar una despedida corta y amable para el usuario {user_name}. "
-        "Agradécele por la conversación y anímale a volver si tiene más dudas. "
-        "Usa los emojis de la personalidad del agente si están definidos."
+        "Tu única tarea es generar una despedida corta y amable para un usuario. "
+        "{instruction}. " # <-- Aquí va nuestra instrucción ya procesada.
+        "Agradécele siempre por la conversación y anímale a volver si tiene más dudas. "
+        "Termina con un emoji amigable."
     )
     
     chain = ChatPromptTemplate.from_template(farewell_prompt_template) | llm | StrOutputParser()
-    final_bot_response = await chain.ainvoke({"user_name": req.user_name or "Usuario"})
+
+    # Invocamos la cadena con la instrucción específica que creamos.
+    final_bot_response = await chain.ainvoke({"instruction": personalization_instruction})
         
     return {"response": final_bot_response, "metadata": {}, "log": log, "next_state": None, "next_params": None}
 
@@ -331,13 +514,33 @@ async def handle_new_question(
     has_doc_capability = any(c.main_type == ContextMainType.DOCUMENTAL for c in all_allowed_contexts)
     
     # --- 2. Enrutar Intención ---
-    selected_tool = await master_router_agent(
-        req.message,
-        has_db_capability=has_db_capability,
-        has_doc_capability=has_doc_capability,
-        llm=llm
-    )
+    selected_tool = await master_router_agent(req.message, has_db_capability, has_doc_capability, llm)
+    
+    # <<<<<<<<<<<<<<<<< LA NUEVA LÓGICA COMIENZA AQUÍ >>>>>>>>>>>>>>>>>
 
+    # --- CONSTRUCCIÓN DINÁMICA DEL SYSTEM PROMPT ---
+    base_system_prompt = vap.system_prompt
+    final_system_prompt = base_system_prompt
+
+    # Si conocemos el nombre del usuario (de Redis o extraído en este turno), enriquecemos el prompt.
+    # El `req.user_name` fue actualizado por nuestro handler `handle_name_and_query_extraction`.
+    
+    if req.user_name and req.user_name.strip().lower() != 'usuario':
+        # Si la condición se cumple, es un nombre real. Construimos la instrucción.
+        personalization_instruction = (
+            f"\n\n--- DIRECTIVA DE PERSONALIZACIÓN Y VERACIDAD (REGLA MAESTRA) ---\n"
+            f"El nombre del usuario es **{req.user_name.strip()}**. Debes dirigirte a él/ella por su nombre para ser amigable.\n"
+            f"**PERO LA REGLA MÁS IMPORTANTE ES:** Tu respuesta a {req.user_name.strip()} debe provenir **ÚNICA, EXCLUSIVA Y ESTRICTAMENTE** del CONTEXTO que se te proporciona más abajo. "
+            f"NO USES tu conocimiento general. Si el CONTEXTO no contiene la respuesta exacta (ej. URLs, nombres de servicios, números de teléfono), di que no tienes esa información específica en tus documentos, pero puedes ayudar con lo que sí sabes. NO INVENTES NADA, ni siquiera URLs o nombres de departamentos."
+        )
+        final_system_prompt += personalization_instruction
+        print(f"PROMPT_LOGIC: System prompt enriquecido con el nombre '{req.user_name.strip()}' y regla anti-alucinación.")
+    else:
+        # (Opcional) Esto es útil para saber qué pasó en tus logs.
+        # Si no hay nombre o es "Usuario", simplemente no hacemos nada y el prompt no se modifica.
+        print(f"PROMPT_LOGIC: No se proporcionó un nombre específico o era el valor por defecto. Se omite la personalización.")
+
+    # <<<<<<<<<<<<<<<<< LA NUEVA LÓGICA TERMINA AQUÍ >>>>>>>>>>>>>>>>>
 
     # --- 3. Control de Acceso y Ejecución ---
     
@@ -403,7 +606,7 @@ async def handle_new_question(
         # Prompt para volver la pregunta actual una pregunta independiente usando el historial
         condense_q_prompt = PromptTemplate.from_template(settings.DEFAULT_RAG_CONDENSE_QUESTION_TEMPLATE)
 
-        # *** ¡EL CAMBIO MÁS IMPORTANTE! ***
+        #  ¡EL CAMBIO MÁS IMPORTANTE! 
         # El prompt final se ensambla dinámicamente, tratando cada parte como un bloque.
         # Esto evita la contaminación del historial y permite que el LLM lo entienda nativamente.
         answer_prompt = ChatPromptTemplate.from_messages([
@@ -412,7 +615,7 @@ async def handle_new_question(
             ("human", "{question}") # La pregunta final independiente del usuario.
         ])
         
-        retriever = vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"context_name": active_doc_ctx.name}})
+        retriever = vector_store.as_retriever(search_kwargs={"k": 3, "filter": {"context_name": active_doc_ctx.name}})
 
         def format_docs(docs: List[LangchainCoreDocument]):
             return "\n\n".join(d.page_content for d in docs)
@@ -455,6 +658,9 @@ async def handle_new_question(
     else:
         return {"response": "Lo siento, no estoy seguro de cómo ayudarte con eso. ¿Puedes intentarlo de otra manera?", "metadata": {}, "log": {"intent": "NO_CAPABILITY"}, "next_state": None, "next_params": None}# Función route_request VERIFICADA
 
+# UBICACIÓN: app/api/endpoints/chat_api_endpoints.py
+# VERSIÓN FINAL, COMPLETA Y VERIFICADA DE route_request.
+
 async def route_request(
     req: ChatRequest, user_dni: Optional[str], conversation_state: Dict, llm: BaseChatModel, history_list: List,
     active_contexts: List[ContextDefinition], all_allowed_contexts: List[ContextDefinition],
@@ -462,37 +668,41 @@ async def route_request(
     redis_client: Optional[AsyncRedis], vector_store: PGVector, app_state: AppState
 ) -> Dict[str, Any]:
     """
-    Orquesta la llamada al handler correcto con un "guardarraíl" para los saludos,
-    incluso si Redis no está funcionando.
+    Orquesta la llamada al handler correcto. Diseño verificado para mantener la
+    estabilidad de la lógica existente mientras se añade la nueva funcionalidad.
     """
-    current_state = conversation_state["state_name"]
-    question = req.message
+    current_state = conversation_state.get("state_name")
     
-    # === REGLA 1: Manejar el saludo inicial absoluto ===
-    if not history_list and question == "__INICIAR_CHAT__":
+    # --- REGLA 1: Saludo inicial. [LÓGICA INTACTA] ---
+    # Maneja exclusivamente el primer mensaje si es la señal de inicio.
+    if not history_list and req.message == "__INICIAR_CHAT__":
         print("ROUTE_LOGIC: Turno 1. Llamando a handle_greeting.")
         return await handle_greeting(vap, llm, req)
     
-    # === REGLA 2 (LA BALA DE PLATA): Guardarraíl sin estado ===
-    # Si la conversación tiene solo 2 mensajes (El inicio y la 1ra respuesta del bot),
-    # el siguiente mensaje del usuario ES la respuesta a "¿Cómo te llamas?".
-    # Esto funciona incluso si Redis está caído y `current_state` es None.
-    if len(history_list) == 2:
-        print("ROUTE_LOGIC: Turno 2 (sin estado) detectado. Llamando a handle_name_confirmation.")
-        return await handle_name_confirmation(question, vap, llm)
+    # --- REGLA 2: Potencial turno de nombre/consulta combinada. [NUEVA LÓGICA DELEGADA] ---
+    # Detecta si estamos en el turno de pedir el nombre.
+    is_potentially_name_turn = (current_state == CONV_STATE_AWAITING_NAME) or \
+                               (len(history_list) == 1 and redis_client is None and vap.name_confirmation_prompt)
     
-    # === REGLA 3: Manejar estados de conversación activos (si Redis funciona) ===
-    # Esta es nuestra lógica original, que sigue siendo válida y más robusta si Redis está activo.
-    if current_state == CONV_STATE_AWAITING_NAME:
-        print("ROUTE_LOGIC: Estado 'AWAITING_NAME' detectado. Llamando a handle_name_confirmation.")
-        return await handle_name_confirmation(question, vap, llm)
-    
+    if is_potentially_name_turn:
+        # En lugar de lógica compleja aquí, se delega a un handler especializado.
+        print("ROUTE_LOGIC: Estado AWAITING_NAME detectado. Delegando a handle_name_and_query_extraction.")
+        return await handle_name_and_query_extraction(
+            # Se le pasan todas las herramientas necesarias para que pueda operar de forma autónoma.
+            req=req, vap=vap, llm=llm, user_dni=user_dni, history_list=history_list,
+            active_contexts=active_contexts, all_allowed_contexts=all_allowed_contexts, db=db,
+            vector_store=vector_store, app_state=app_state, redis_client=redis_client
+        )
+
+    # --- REGLA 3: Clarificación de herramientas. [LÓGICA INTACTA] ---
+    # Si estamos a mitad de una conversación multi-turno con una herramienta, se continúa ese flujo.
     if current_state == CONV_STATE_AWAITING_TOOL_PARAMS:
         print("ROUTE_LOGIC: Estado 'AWAITING_TOOL_PARAMS' detectado. Llamando a handle_tool_clarification.")
         return await handle_tool_clarification(req, conversation_state, llm, history_list, active_contexts)
     
-    # === REGLA 4: Si nada de lo anterior coincide, es una pregunta nueva. AHORA SÍ, enrutamos. ===
-    print("ROUTE_LOGIC: No hay estado de saludo. Enrutando como nueva pregunta.")
+    # --- REGLA 4: Pregunta nueva por defecto. [LÓGICA INTACTA] ---
+    # Si ninguna de las condiciones anteriores se cumple, es una pregunta estándar.
+    print("ROUTE_LOGIC: No hay estado de conversación activo. Enrutando como nueva pregunta.")
     return await handle_new_question(
         req=req, user_dni=user_dni, llm=llm, history_list=history_list, active_contexts=active_contexts,
         all_allowed_contexts=all_allowed_contexts, vap=vap, db=db, vector_store=vector_store,
@@ -545,7 +755,7 @@ async def process_chat_message(
         if not llm_config: raise HTTPException(404, "Configuración LLM no encontrada.")
         
         # === ¡AQUÍ ESTÁ LA NUEVA LÓGICA DE DECISIÓN! ===
-        final_temperature = 0.7 # Valor de fallback por si todo falla
+        final_temperature = 0.3 # Valor de fallback por si todo falla
 
         # 1. Empezamos con la temperatura por defecto del MODELO
         if llm_config.default_temperature is not None:
@@ -625,11 +835,9 @@ async def process_chat_message(
             log_to_save = log.copy()
             log_to_save["metadata_details_json"] = json.dumps(metadata_response, default=str)
             
-            # Corrección 3: Llamada a la función de CRUD asíncrona
             await create_interaction_log_async(db, log_to_save)
             
             if "error_message" not in log:
-                # Corrección 4: Llamada al método async de historial
                 await history.add_messages_async([HumanMessage(content=question), AIMessage(content=final_bot_response)])
 
         except Exception as final_e:
