@@ -23,8 +23,8 @@ const initialConfig: WebchatUIConfig = {
   footerLink: 'https://atiqtec.com',
   initialState: 'closed',
   initialStateText: '¡Hola! ¿Necesitas ayuda?',
-  avatarImageUrl: '/Atiqtec.jpg',
-  floatingButtonImageUrl: '/Atiqtec.jpg',
+  avatarImageUrl: '/Atiqtec.png',
+  floatingButtonImageUrl: '/Atiqtec.png',
   themeMode: 'system',
   theme: {
     primaryColor: '#2a4dac',
