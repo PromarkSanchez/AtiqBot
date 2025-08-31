@@ -205,12 +205,11 @@ class AppState:
         print(f"LLM_CACHE_MISS: Creando nueva instancia de '{model_config.display_name}' con Temp {temperature_to_use:.2f}.")
         
         # Le pasamos la temperatura decidida al adaptador. El adaptador ya no piensa, solo ejecuta.
-        adapter_instance: BaseChatModel = await asyncio.to_thread(
-            langchain_llm_adapter.get_langchain_llm_adapter,
+        adapter_instance: BaseChatModel = langchain_llm_adapter.get_langchain_llm_adapter(
             config=model_config,
             temperature_to_use=temperature_to_use
         )
-
+        
         self.llm_adapter_cache[cache_key] = adapter_instance
         return adapter_instance
 
