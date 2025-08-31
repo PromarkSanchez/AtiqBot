@@ -47,7 +47,7 @@
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone https://github.com/PromarkSanchez/proyecto1.git
+    git clone https://github.com/PromarkSanchez/AtiqBot
     cd proyecto1
     ```
 
