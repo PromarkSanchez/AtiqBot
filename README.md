@@ -48,7 +48,7 @@
 1.  **Clonar el repositorio:**
     ```bash
     git clone https://github.com/PromarkSanchez/AtiqBot
-    cd proyecto1
+    cd AtiqBot
     ```
 
 2.  **Configurar el Backend:**
